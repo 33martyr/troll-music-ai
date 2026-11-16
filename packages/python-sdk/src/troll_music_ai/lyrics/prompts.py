@@ -272,6 +272,98 @@ Return JSON in this shape:
     return _messages(user)
 
 
+# ------------------------------ troll songs ------------------------------- #
+
+_FRIEND_RULE = """\
+This is a roast between friends, made to be sent to the group chat. The friend should laugh too.
+- Roast what they DO (the situation), never who they ARE: no jokes about looks, weight, health, \
+race, religion, gender, sexuality, disability or family tragedy, at any intensity.
+- No real surnames, addresses, workplaces or other private details, even if given.
+- Exaggerate wildly. Specific, absurd images beat generic insults."""
+
+_LEVEL_NOTES = {
+    2: "FRIENDLY: affectionate teasing, the kind you'd say at their birthday",
+    4: "SAVAGE: sharp, relentless punchlines, still clearly playful",
+    5: "BRUTAL: maximum comedic destruction of the behaviour, over-the-top, still within the rules above",
+}
+
+
+def troll_structure(request) -> list[str]:
+    """Section labels in performance order for a troll song."""
+    from ..troll import TrollKind
+
+    kind = request.kind
+    if kind is TrollKind.ROAST:
+        return ["Intro", "Roast", "Outro"]
+    if kind is TrollKind.MEME_SONG:
+        return ["Chorus", "Verse 1", "Chorus", "Chorus"]
+    if kind is TrollKind.GROUP_ROAST and request.names:
+        return ["Intro", *request.names, "Chorus", "Outro"]
+    if kind is TrollKind.MEME_VIDEO:
+        return ["Intro", "Verse 1", "Chorus", "Outro"]
+    return ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Outro"]
+
+
+def _troll_shape(request) -> str:
+    from ..troll import TrollKind
+
+    kind = request.kind
+    if kind is TrollKind.ROAST:
+        return (
+            "A stand-up style roast set over a beat. Intro: 2 lines, a dramatic announcer bringing the target "
+            "to the stage. Roast: 10 to 12 one-liners, every line its own punchline. Outro: 2 lines, mic drop."
+        )
+    if kind is TrollKind.MEME_SONG:
+        return (
+            "A ridiculously catchy meme song. The Chorus is 4 short lines built on one chantable hook that repeats "
+            "the target's name; it must be stupidly easy to sing along to and identical every time. Verse 1 is 6 lines "
+            "telling the story."
+        )
+    if kind is TrollKind.GROUP_ROAST:
+        return (
+            "A group chat roast: each person gets their own section (labelled with their name) of 4 to 6 lines "
+            "roasting them, the Chorus (4 lines) roasts the group chat as a whole, Intro and Outro 2 lines each."
+        )
+    if kind is TrollKind.MEME_VIDEO:
+        return "A short diss track for a meme video: Intro 2 lines, Verse 1 8 lines, Chorus 4 lines, Outro 2 lines."
+    return (
+        "A diss track. Intro: 2 to 4 lines of trash talk. Each verse: 8 lines, building to the hardest punchline "
+        "on the last bar. Chorus: 4 lines with one savage hook, identical every time. Outro: 2 to 4 lines."
+    )
+
+
+def troll_messages(request) -> list[ChatMessage]:
+    from ..troll import DELIVERIES
+
+    target = request.who
+    names = f"PEOPLE IN THE CHAT: {', '.join(request.names)}\n" if request.names else ""
+    performer = request.rapper_name or "the roaster"
+    rating = "explicit language allowed (no slurs)" if request.explicit else "clean, no profanity"
+    user = f"""\
+TASK: generate_troll
+KIND: {request.kind.value}
+TARGET: {target}
+{names}SITUATION: {request.situation}
+STYLE: {request.genre}
+INTENSITY: {_LEVEL_NOTES[request.level]}
+DELIVERY: performed by {performer}, as {DELIVERIES[request.delivery][1]}
+LANGUAGE: {request.language}
+LANGUAGE RATING: {rating}
+STRUCTURE: {", ".join(troll_structure(request))}
+
+{_FRIEND_RULE}
+
+{_troll_shape(request)}
+Lines are short (4 to 10 words) so they can be performed fast. Name {target} often. Every joke \
+comes from the SITUATION. Give it a funny title (a fake hit-single name). Output one section per \
+entry in STRUCTURE, in that order, using those exact labels.
+Also suggest a BPM, a genre and 3 short beat notes.
+
+Return JSON in this shape:
+{SONG_SCHEMA}"""
+    return _messages(user)
+
+
 def characters_messages(topic: str) -> list[ChatMessage]:
     user = f"""\
 TASK: suggest_characters

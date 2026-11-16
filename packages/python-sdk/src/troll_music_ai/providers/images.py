@@ -85,6 +85,75 @@ def render_card(request: ImageRequest, out_path: Path) -> Path:
     return target
 
 
+def _sticker(draw, x: float, y: float, width: float) -> None:
+    """A parody parental-advisory sticker: black box, white frame, two lines."""
+    height = width * 0.42
+    draw.rectangle((x, y, x + width, y + height), fill=(0, 0, 0, 255))
+    draw.rectangle((x + width * 0.03, y + width * 0.03, x + width * 0.97, y + height - width * 0.03), outline=(255, 255, 255, 255), width=max(2, int(width * 0.02)))
+    for text, share, ty in (("PARENTAL ADVISORY", 0.085, y + height * 0.14), ("EMOTIONAL DAMAGE", 0.14, y + height * 0.45)):
+        size = max(10, int(width * share))
+        font = _font(size)
+        while size > 10 and draw.textlength(text, font=font) > width * 0.84:
+            size -= 1
+            font = _font(size)
+        draw.text((x + (width - draw.textlength(text, font=font)) / 2, ty), text, font=font, fill=(255, 255, 255, 255))
+
+
+def _outlined(draw, xy: tuple[float, float], text: str, font, fill=(255, 255, 255, 255), stroke: int = 4) -> None:
+    draw.text(xy, text, font=font, fill=fill, stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
+
+
+def meme_cover(source: Path, out_path: Path, *, title: str, artist: str) -> Path:
+    """Turn a square picture into a fake album cover: artist, title and a
+    parody advisory sticker drawn on top with Pillow (not an AI model)."""
+    from PIL import Image, ImageDraw
+
+    with Image.open(source) as opened:
+        image = opened.convert("RGBA")
+    side = image.width
+    draw = ImageDraw.Draw(image)
+    artist_font = _font(max(18, side // 16))
+    _outlined(draw, (side * 0.05, side * 0.04), artist.upper()[:32], artist_font, fill=(200, 255, 62, 255), stroke=max(2, side // 220))
+    size = max(24, side // 11)
+    lines = textwrap.wrap(title.upper(), width=max(8, int(side / (size * 0.62))))[:3]
+    title_font = _font(size)
+    y = side * 0.62 - (len(lines) - 1) * size * 1.1
+    for line in lines:
+        _outlined(draw, (side * 0.05, y), line, title_font, stroke=max(3, side // 160))
+        y += size * 1.1
+    sticker = side * 0.3
+    _sticker(draw, side - sticker - side * 0.04, side - sticker * 0.42 - side * 0.04, sticker)
+    target = out_path.with_suffix(".png")
+    image.convert("RGB").save(target)
+    return target
+
+
+def intro_card(out_path: Path, *, width: int, height: int, presenter: str, title: str, seed: int = 0) -> Path:
+    """A dramatic opening title card for a meme video: '<presenter> PRESENTS'."""
+    from PIL import Image, ImageDraw
+
+    base = render_card(ImageRequest(prompt=f"intro card {title}", width=width, height=height, seed=seed, title=" "), out_path.with_name(out_path.stem + "_bg"))
+    with Image.open(base) as opened:
+        image = opened.convert("RGBA")
+    shade = Image.new("RGBA", image.size, (0, 0, 0, 150))
+    image = Image.alpha_composite(image, shade)
+    draw = ImageDraw.Draw(image)
+    short = min(width, height)
+    small, big = _font(max(16, short // 18)), _font(max(28, short // 8))
+    presents = f"{presenter.upper()[:30]} PRESENTS"
+    lines = textwrap.wrap(title.upper(), width=max(8, int(width / (short // 8 * 0.62))))[:4]
+    y = height * 0.5 - (len(lines) * short // 8 * 1.1) / 2
+    draw.text(((width - draw.textlength(presents, font=small)) / 2, y - short // 18 * 2.2), presents, font=small, fill=(200, 255, 62, 255))
+    for line in lines:
+        _outlined(draw, ((width - draw.textlength(line, font=big)) / 2, y), line, big, stroke=max(3, short // 180))
+        y += short // 8 * 1.1
+    sticker = short * 0.32
+    _sticker(draw, (width - sticker) / 2, y + short * 0.05, sticker)
+    target = out_path.with_suffix(".png")
+    image.convert("RGB").save(target)
+    return target
+
+
 class TypographicProvider(ImageGenerationProvider):
     """Built-in title cards drawn with Pillow. Not an AI model."""
 

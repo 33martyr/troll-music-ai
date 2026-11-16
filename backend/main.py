@@ -14,14 +14,14 @@ from typing import Any
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import assets, jobs, lyrics, projects, studio, system, voices
+from backend.api import assets, jobs, lyrics, projects, studio, system, troll, voices
 from backend.audio import ffmpeg
 from backend.core import security
 from backend.core.config import Settings, get_settings
 from backend.core.db import create_schema, make_engine, make_session_factory
 from backend.core.errors import install_error_handlers
 from backend.core.storage import LocalStorage
-from backend.services import audio_jobs, visual_jobs
+from backend.services import audio_jobs, troll_jobs, visual_jobs
 from backend.services import lyrics as lyrics_jobs
 from backend.services.providers import ProviderManager
 from backend.workers.queue import InlineJobQueue, ThreadPoolJobQueue
@@ -57,7 +57,7 @@ def create_app(
     ffmpeg.configure(settings.ffmpeg_path)
     security.configure(settings.api_key.get_secret_value() if settings.api_key else None)
 
-    handlers = {**lyrics_jobs.HANDLERS, **audio_jobs.HANDLERS, **visual_jobs.HANDLERS}
+    handlers = {**lyrics_jobs.HANDLERS, **audio_jobs.HANDLERS, **visual_jobs.HANDLERS, **troll_jobs.HANDLERS}
     runner = JobRunner(session_factory, handlers, manager, storage)
     queue = (
         InlineJobQueue(runner.run)
@@ -79,7 +79,7 @@ def create_app(
 
     app = FastAPI(
         title="TROLL-MUSIC-AI",
-        version="0.2.0",
+        version="0.3.0",
         description="Roast it. Rap it. Release it.",
         lifespan=lifespan,
     )
@@ -105,7 +105,7 @@ def create_app(
 
     # Everything else sits behind the API key when TROLL_API_KEY is set.
     guard = [Depends(security.require_api_key)]
-    for module in (system, projects, assets, lyrics, studio, voices, jobs):
+    for module in (system, projects, assets, lyrics, studio, troll, voices, jobs):
         app.include_router(module.router, dependencies=guard)
     return app
 

@@ -59,7 +59,7 @@ class MockTextProvider(TextGenerationProvider):
                 section["lines"] = [f"{_TAG} {mode} rewrite of {section['label']}"] * 2
             payload = song
         else:
-            topic = _field(prompt, "TOPIC") or "nothing in particular"
+            topic = _field(prompt, "TOPIC") or _field(prompt, "SITUATION") or "nothing in particular"
             structure = (_field(prompt, "STRUCTURE") or "Intro, Verse 1, Chorus, Outro").split(", ")
             payload = {
                 "title": f"{_TAG} Placeholder Song",

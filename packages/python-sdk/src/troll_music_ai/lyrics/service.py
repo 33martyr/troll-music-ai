@@ -6,7 +6,8 @@ from collections.abc import Callable
 
 from ..errors import LyricsParseError
 from ..providers.base import ChatMessage, TextGenerationProvider, TextRequest
-from ..types import BattleRequest, GenerationMeta, Lyrics, LyricsRequest, RewriteMode, SectionType
+from ..troll import TrollKind, TrollRequest
+from ..types import BattleCharacter, BattleRequest, GenerationMeta, Lyrics, LyricsRequest, LyricStyle, RewriteMode, SectionType
 from . import prompts
 from .parser import parse_characters, parse_lyrics, parse_section_lines
 
@@ -15,6 +16,51 @@ ProgressCallback = Callable[[float, str], None]
 
 def _noop(_fraction: float, _stage: str) -> None:
     return None
+
+
+_TROLL_STYLE = {
+    TrollKind.DISS_TRACK: LyricStyle.DISS_TRACK,
+    TrollKind.ROAST: LyricStyle.SAVAGE,
+    TrollKind.MEME_SONG: LyricStyle.MEME_RAP,
+    TrollKind.GROUP_ROAST: LyricStyle.TROLL,
+    TrollKind.MEME_VIDEO: LyricStyle.DISS_TRACK,
+    TrollKind.RAP_BATTLE: LyricStyle.DISS_TRACK,
+    TrollKind.FUNNY_BEAT: LyricStyle.FUNNY,
+}
+
+
+def lyrics_request_for(request: TrollRequest) -> LyricsRequest:
+    """The equivalent lyrics request, so the lyrics editor can regenerate a
+    section or rewrite troll lyrics with the same settings."""
+    return LyricsRequest(
+        prompt=f"Roasting {request.who}: {request.situation}",
+        genre=request.genre[:60],
+        mood="playful",
+        language=request.language,
+        style=_TROLL_STYLE[request.kind],
+        troll_intensity=request.level,
+        explicit=request.explicit,
+        persona=request.rapper_name,
+    )
+
+
+def battle_request_for(request: TrollRequest) -> BattleRequest:
+    """The roaster against the friend. The friend's character is built only
+    from the situation given, as the fiction rule in the prompt requires."""
+    from ..troll import rapper_name
+
+    challenger = request.rapper_name or rapper_name()
+    who = request.who
+    return BattleRequest(
+        topic=request.situation,
+        character_a=BattleCharacter(name=challenger[:60], personality="the friend who finally says what everyone is thinking", style="cocky, punchline-heavy"),
+        character_b=BattleCharacter(name=who[:60], personality=f"defends themself badly. Known for: {request.situation}"[:300], style="flustered comebacks that backfire"),
+        rounds=2,
+        genre=request.genre[:60],
+        language=request.language,
+        troll_intensity=request.level,
+        explicit=request.explicit,
+    )
 
 
 class LyricsService:
@@ -152,6 +198,29 @@ class LyricsService:
             section.performer = claimed[0] if len(claimed) == 1 else None
             if section.performer and section.performer not in section.label:
                 section.label = f"{section.performer}: {section.label}"[:60]
+        lyrics.meta = self._meta(model)
+        return lyrics
+
+    async def generate_troll(
+        self, request: TrollRequest, *, on_progress: ProgressCallback | None = None
+    ) -> Lyrics:
+        """Lyrics for a diss track, roast, meme song or group chat roast.
+
+        A rap battle goes through :meth:`generate_battle` with
+        :func:`battle_request_for`; a funny beat has no lyrics.
+        """
+        if request.kind in (TrollKind.RAP_BATTLE, TrollKind.FUNNY_BEAT):
+            raise ValueError(f"{request.kind.value} is not written by generate_troll.")
+        lyrics, model = await self._ask(
+            prompts.troll_messages(request),
+            lambda text: parse_lyrics(text, language=request.language, explicit=request.explicit),
+            on_progress or _noop,
+        )
+        if request.kind is TrollKind.GROUP_ROAST:
+            # Whoever a section is about is its performer's target, not its performer:
+            # keep the label so the video and editor show the name.
+            for section in lyrics.sections:
+                section.performer = None
         lyrics.meta = self._meta(model)
         return lyrics
 

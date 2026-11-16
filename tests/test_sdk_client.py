@@ -125,3 +125,14 @@ def test_trollmusic_with_a_key_or_url_is_the_blocking_rest_client():
 def test_local_toolkit_writes_a_beat_without_a_server(tmp_path):
     path = TrollMusic().generate_beat(tmp_path / "beat.wav", genre="drill", bpm=140, duration_seconds=5)
     assert path.is_file() and path.stat().st_size > 100_000
+
+
+def test_one_button_troll_through_the_sdk(settings):
+    async def run():
+        async with connect(settings) as client:
+            idea = await client.random_troll()
+            song = await client.troll(idea["situation"], kind="roast", style="country", target="Dave")
+            assert song.kind == "song" and song.meta["troll"]["target"] == "Dave"
+            assert len(song.job.result_asset_ids) == 5  # lyrics, vocals, beat, song, cover
+
+    asyncio.run(run())

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "troll-music-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn any idea, joke or roast into lyrics, beats, songs and music videos. Python toolkit."
 readme = "README.md"
 requires-python = ">=3.11"

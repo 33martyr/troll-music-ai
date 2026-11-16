@@ -20,7 +20,7 @@ from backend.workers.runner import JobContext, JobHandler
 from troll_music_ai import Lyrics, TrollMusicError
 from troll_music_ai.lyrics import extract_json
 from troll_music_ai.providers import ChatMessage, ImageGenerationProvider, TextRequest
-from troll_music_ai.providers.images import render_card
+from troll_music_ai.providers.images import intro_card, meme_cover, render_card
 from troll_music_ai.types import ImageRequest
 
 JOB_VIDEO = "video.generate"
@@ -229,7 +229,15 @@ def generate_video(context: JobContext) -> str:
             prompt=scene["image_prompt"], width=width, height=height, seed=seed + scene["index"],
             title=scene["label"], subtitle=(scene["lines"][0] if scene["lines"] else title)[:90],
         )
-        path, fell_back = _image(context, provider, request, context.workdir / f"still_{scene['index']:03d}.png")
+        intro = params.get("intro")
+        if intro and scene["index"] == 0:
+            # Dramatic opening card, drawn by the built-in renderer on purpose.
+            path, fell_back = intro_card(
+                context.workdir / "still_000.png", width=width, height=height,
+                presenter=str(intro.get("presenter") or "TROLL-MUSIC-AI"), title=str(intro.get("title") or title), seed=seed,
+            ), False
+        else:
+            path, fell_back = _image(context, provider, request, context.workdir / f"still_{scene['index']:03d}.png")
         fallbacks += fell_back
         stills.append(Scene(path, scene["start"], scene["end"]))
 
@@ -243,7 +251,8 @@ def generate_video(context: JobContext) -> str:
     render_video(stills, target, context.workdir, aspect=aspect, audio=audio_path, captions=captions, on_progress=on_clip)
     context.progress(0.95, "Saving")
     media = ffmpeg.probe(target)
-    all_fallback = provider is None or fallbacks == len(scenes)
+    drawn = len(scenes) - (1 if params.get("intro") else 0)
+    all_fallback = provider is None or drawn == 0 or fallbacks >= drawn
     video = context.store(
         target,
         kind=AssetKind.VIDEO,
@@ -263,6 +272,7 @@ def generate_video(context: JobContext) -> str:
             "renderer": "ffmpeg-stills",
             "image_provider": "typographic" if all_fallback else info.name if info else None,
             "image_fallbacks": fallbacks,
+            "intro_card": bool(params.get("intro")),
             "storyboard_source": "llm" if directed else "template",
             "storyboard_asset_id": storyboard.id,
         },
@@ -310,13 +320,16 @@ def generate_artwork(context: JobContext) -> str:
             image.save(final, "PNG")
     except OSError as exc:
         raise TrollMusicError(f"{info.name} did not return a usable image.") from exc
+    if params.get("artist"):
+        # Fake-album-cover text and sticker, drawn by Pillow over the picture.
+        final = meme_cover(final, context.workdir / "cover_meme.png", title=title, artist=params["artist"])
     return context.store(
         final,
         kind=AssetKind.ARTWORK,
         title=f"{title} · cover",
         info=info,
         mime_type="image/png",
-        meta={"width": 1024, "height": 1024, "style": style, "prompt": prompt},
+        meta={"width": 1024, "height": 1024, "style": style, "prompt": prompt, "meme_overlay": bool(params.get("artist"))},
         sources={"lyrics": lyrics_asset},
     ).id
 

@@ -20,6 +20,7 @@ from .errors import (
     TrollMusicError,
 )
 from .studio import AsyncTrollMusic, TrollMusic
+from .troll import Intensity, TrollKind, TrollRequest, random_troll, rapper_name
 from .types import (
     BattleCharacter,
     BattleRequest,
@@ -36,7 +37,7 @@ from .types import (
     SongLength,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "ApiError",
@@ -70,4 +71,9 @@ __all__ = [
     "TrollMusic",
     "TrollMusicError",
     "build_text_provider",
+    "Intensity",
+    "TrollKind",
+    "TrollRequest",
+    "random_troll",
+    "rapper_name",
 ]

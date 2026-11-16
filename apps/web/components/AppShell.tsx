@@ -4,7 +4,7 @@ import { Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { NAV } from "@/lib/modules";
+import { NAV_MAIN, NAV_SETTINGS, NAV_WORKSHOP, type NavItem } from "@/lib/modules";
 
 function Logo() {
   return (
@@ -23,27 +23,42 @@ function Logo() {
   );
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLink({ item, onNavigate, big }: { item: NavItem; onNavigate?: () => void; big?: boolean }) {
   const pathname = usePathname();
+  const { href, label, icon: Icon } = item;
+  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
   return (
-    <nav className="flex flex-col gap-0.5">
-      {NAV.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-              active ? "bg-grape/15 text-fg" : "text-muted hover:bg-white/5 hover:text-fg"
-            }`}
-          >
-            <Icon size={17} className={active ? "text-volt" : "text-muted group-hover:text-fg"} />
-            <span className="flex-1">{label}</span>
-          </Link>
-        );
-      })}
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={`group flex items-center gap-3 rounded-lg px-3 transition-colors ${big ? "py-2.5 text-[15px] font-semibold" : "py-1.5 text-sm"} ${
+        active ? "bg-grape/15 text-fg" : "text-muted hover:bg-white/5 hover:text-fg"
+      }`}
+    >
+      <Icon size={big ? 18 : 16} className={active ? "text-volt" : "text-muted group-hover:text-fg"} />
+      <span className="flex-1">{label}</span>
+    </Link>
+  );
+}
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav className="flex flex-col gap-6">
+      <div className="flex flex-col gap-0.5">
+        {NAV_MAIN.map((item) => (
+          <NavLink key={item.href} item={item} onNavigate={onNavigate} big />
+        ))}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-widest text-muted/70">Workshop</p>
+        {NAV_WORKSHOP.map((item) => (
+          <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+        ))}
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <NavLink item={NAV_SETTINGS} onNavigate={onNavigate} />
+      </div>
     </nav>
   );
 }
@@ -53,7 +68,7 @@ function SidebarFooter() {
     <p className="px-3 text-xs leading-relaxed text-muted">
       Roast it. Rap it. Release it.
       <br />
-      Open source, MIT licensed.
+      Roast what they did, not who they are.
     </p>
   );
 }

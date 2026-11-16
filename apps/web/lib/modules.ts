@@ -1,9 +1,9 @@
 import {
   Clapperboard,
   Drum,
+  Flame,
   FolderOpen,
   Image as ImageIcon,
-  LayoutDashboard,
   type LucideIcon,
   Mic,
   Music,
@@ -12,87 +12,27 @@ import {
   Swords,
 } from "lucide-react";
 
-export interface StudioModule {
+export interface NavItem {
   href: string;
-  nav: string;
-  title: string;
-  blurb: string;
+  label: string;
   icon: LucideIcon;
-  /** Which provider kind does the creative work, shown as "powered by". */
-  provider: "text" | "music" | "voice" | "image";
 }
 
-export const GENERATORS: StudioModule[] = [
-  {
-    href: "/lyrics",
-    nav: "Generate Lyrics",
-    title: "Generate Lyrics",
-    blurb: "Describe the roast. Get a full song: verses, chorus, BPM and beat notes.",
-    icon: PenLine,
-    provider: "text",
-  },
-  {
-    href: "/beat",
-    nav: "Generate Beat",
-    title: "Generate Beat",
-    blurb: "Instrumentals on their own: pick a genre, BPM and mood, or upload yours.",
-    icon: Drum,
-    provider: "music",
-  },
-  {
-    href: "/song",
-    nav: "Generate Song",
-    title: "Generate Song",
-    blurb: "Lyrics, beat and vocals mixed into one track. Redo any part on its own.",
-    icon: Music,
-    provider: "voice",
-  },
-  {
-    href: "/video",
-    nav: "Generate Music Video",
-    title: "Generate Music Video",
-    blurb: "Storyboard, scene images and synced lyrics rendered into an MP4.",
-    icon: Clapperboard,
-    provider: "image",
-  },
-  {
-    href: "/voice",
-    nav: "My Voice",
-    title: "Voices",
-    blurb: "Try the available voices, or add an authorized voice profile with consent.",
-    icon: Mic,
-    provider: "voice",
-  },
-  {
-    href: "/battles",
-    nav: "Rap Battles",
-    title: "Create Rap Battle",
-    blurb: "Two fictional rivals, alternating verses, two voices.",
-    icon: Swords,
-    provider: "text",
-  },
-  {
-    href: "/artwork",
-    nav: "Cover Art",
-    title: "Generate Cover Art",
-    blurb: "A square cover for your track, from its title, genre and style.",
-    icon: ImageIcon,
-    provider: "image",
-  },
+/** The product: one button on the home page, and everything you made. */
+export const NAV_MAIN: NavItem[] = [
+  { href: "/", label: "Roast Someone", icon: Flame },
+  { href: "/projects", label: "My Trolls", icon: FolderOpen },
 ];
 
-export const NAV: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/", label: "Studio", icon: LayoutDashboard },
-  ...GENERATORS.map((m) => ({ href: m.href, label: m.nav, icon: m.icon })),
-  { href: "/projects", label: "My Projects", icon: FolderOpen },
-  { href: "/settings", label: "Model Settings", icon: Settings },
+/** Tweak one part of a troll by hand. Optional; the home page does all of this in one go. */
+export const NAV_WORKSHOP: NavItem[] = [
+  { href: "/lyrics", label: "Lyrics Editor", icon: PenLine },
+  { href: "/battles", label: "Battle Builder", icon: Swords },
+  { href: "/beat", label: "Beat Maker", icon: Drum },
+  { href: "/song", label: "Song Mixer", icon: Music },
+  { href: "/voice", label: "Voices", icon: Mic },
+  { href: "/video", label: "Video Maker", icon: Clapperboard },
+  { href: "/artwork", label: "Cover Maker", icon: ImageIcon },
 ];
 
-export const PIPELINE: { label: string; href: string }[] = [
-  { label: "Lyrics", href: "/lyrics" },
-  { label: "Beat", href: "/beat" },
-  { label: "Vocals", href: "/voice" },
-  { label: "Song", href: "/song" },
-  { label: "Video", href: "/video" },
-  { label: "Cover", href: "/artwork" },
-];
+export const NAV_SETTINGS: NavItem = { href: "/settings", label: "AI Settings", icon: Settings };

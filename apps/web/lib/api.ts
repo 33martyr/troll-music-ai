@@ -15,6 +15,8 @@ import type {
   ProviderUpdate,
   StockVoices,
   StudioOptions,
+  TrollOptions,
+  TrollRequest,
   VoiceProfile,
 } from "./types";
 
@@ -112,6 +114,7 @@ export interface VideoBody {
   subtitles: boolean;
   duration_seconds?: number | null;
   notes?: string | null;
+  intro?: { presenter: string; title?: string | null } | null;
 }
 export interface ArtworkBody {
   project_id?: string | null;
@@ -122,6 +125,7 @@ export interface ArtworkBody {
   style: string;
   character?: string | null;
   notes?: string | null;
+  artist?: string | null;
 }
 
 export const api = {
@@ -183,6 +187,13 @@ export const api = {
   generateSong: (body: SongBody) => post<Job>("/api/songs/generate", body),
   generateVideo: (body: VideoBody) => post<Job>("/api/videos/generate", body),
   generateArtwork: (body: ArtworkBody) => post<Job>("/api/artwork/generate", body),
+
+  troll: (trollRequest: TrollRequest, projectId: string | null, extras: { with_video?: boolean; with_cover?: boolean } = {}) =>
+    post<Job>("/api/troll", { project_id: projectId, request: trollRequest, ...extras }),
+  trollOptions: () => request<TrollOptions>("/api/troll/options"),
+  randomTroll: () => request<Partial<TrollRequest>>("/api/troll/random"),
+  rapperName: (target?: string | null) =>
+    request<{ name: string }>(`/api/troll/rapper-name${target ? `?target=${encodeURIComponent(target)}` : ""}`),
 
   voices: () => request<VoiceProfile[]>("/api/voices"),
   stockVoices: () => request<StockVoices>("/api/voices/stock"),

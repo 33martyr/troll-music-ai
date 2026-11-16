@@ -401,6 +401,26 @@ class AsyncTrollMusicClient:
         body = {"project_id": _id(project), "lyrics_asset_id": _id(lyrics), "title": title, **options}
         return await self._generate("/api/artwork/generate", body, wait=wait, timeout=timeout, on_progress=on_progress)
 
+    async def troll(
+        self, situation: str, *, kind: str = "diss_track", style: str = "trap", intensity: str = "savage",
+        project: Project | str | None = None, with_video: bool = False, with_cover: bool = True,
+        wait: bool = True, timeout: float = 3600.0, on_progress: ProgressCallback | None = None, **options: Any,
+    ) -> "Asset | JobInfo":
+        """The one-button meme: words, vocals, beat, mix, fake album cover and,
+        for ``kind="meme_video"`` (or ``with_video=True``), a vertical MP4.
+
+        Returns the video if one was made, otherwise the song (or the beat for
+        ``funny_beat``). ``asset.job.result_asset_ids`` lists every file made.
+        ``options``: target, names, rapper_name, delivery, explicit, language.
+        """
+        request = {"situation": situation, "kind": kind, "style": style, "intensity": intensity, **options}
+        body = {"project_id": _id(project), "request": request, "with_video": with_video, "with_cover": with_cover}
+        return await self._generate("/api/troll", body, wait=wait, timeout=timeout, on_progress=on_progress)
+
+    async def random_troll(self) -> dict:
+        """A random situation and settings, ready to pass to :meth:`troll`."""
+        return await self._json("GET", "/api/troll/random")
+
     # ----------------------------- voice profiles -------------------------- #
 
     async def create_voice_profile(

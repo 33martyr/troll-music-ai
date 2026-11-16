@@ -70,6 +70,48 @@ export interface AssetMeta {
   storyboard_source?: string;
   storyboard_asset_id?: string;
   original_filename?: string;
+  intro_card?: boolean;
+  meme_overlay?: boolean;
+  troll?: TrollMeta;
+}
+
+// ---------------------------------- troll ---------------------------------- //
+
+export type TrollKind = "diss_track" | "roast" | "rap_battle" | "meme_song" | "group_roast" | "funny_beat" | "meme_video";
+export type Intensity = "friendly" | "savage" | "brutal";
+
+export interface TrollRequest {
+  situation: string;
+  kind: TrollKind;
+  style: string;
+  intensity: Intensity;
+  delivery: string;
+  target?: string | null;
+  names?: string[];
+  rapper_name?: string | null;
+  explicit?: boolean;
+  language?: string;
+}
+
+/** Stored on the song (or beat) a troll job made: where everything else is. */
+export interface TrollMeta {
+  kind: TrollKind;
+  label: string;
+  artist: string;
+  target: string;
+  style: string;
+  intensity: Intensity;
+  lyrics_asset_id: string | null;
+  cover_asset_id: string | null;
+  video_asset_id: string | null;
+  warnings: string[];
+}
+
+export interface TrollOptions {
+  kinds: { id: TrollKind; label: string }[];
+  styles: { id: string; label: string; song: boolean }[];
+  intensities: { id: Intensity; label: string }[];
+  deliveries: { id: string; label: string }[];
 }
 
 export interface Asset<TContent = Record<string, unknown>> {

@@ -44,6 +44,12 @@ PRESETS: dict[str, dict] = {
     "pop": dict(bpm=116, kick="x.....x.x.....x.", snare="....x.......x...", hat="x.x.x.x.x.x.x.x.", scale="major", bass=0.7, pad=0.5, lead=0.5),
     "rock": dict(bpm=124, kick="x.....x.x...x...", snare="....x.......x...", hat="x.x.x.x.x.x.x.x.", scale="minor", bass=0.8, pad=0.7, lead=0.4, drive=True),
     "jazz": dict(bpm=120, kick="x.........x.....", snare="......x.......x.", hat="x..xx.x..xx.x..x", swing=0.3, scale="major", bass=0.7, pad=0.45, lead=0.5, walking=True, soft=True),
+    # Meme styles.
+    "country": dict(bpm=104, kick="x.......x.......", snare="....x.......x...", hat="x.x.x.x.x.x.x.x.", swing=0.08, scale="major", bass=0.75, pad=0.3, lead=0.7, walking=True),
+    "opera": dict(bpm=76, kick="x...............", snare="", hat="", scale="minor", bass=0.6, pad=1.4, lead=0.55, soft=True),
+    "techno": dict(bpm=130, kick="x...x...x...x...", snare="....x.......x...", hat="..x...x...x...x.", scale="minor", bass=0.9, pad=0.3, lead=0.55, lead_wave="square"),
+    "circus": dict(bpm=150, kick="x.......x.......", snare="....x.......x...", hat="", scale="major", bass=0.9, pad=0.15, lead=0.85, lead_wave="square", walking=True),
+    "chiptune": dict(bpm=150, kick="x...x...x...x...", snare="....x.......x...", hat="x.x.x.x.x.x.x.x.", scale="major", bass=0.7, pad=0.2, lead=0.8, lead_wave="square"),
     "experimental": dict(bpm=110, kick="", snare="", hat="", scale="phrygian", bass=0.8, pad=0.5, lead=0.6, random=True),
 }
 NOTE_NAMES = {"c": 0, "d": 2, "e": 4, "f": 5, "g": 7, "a": 9, "b": 11}

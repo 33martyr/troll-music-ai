@@ -1,181 +1,354 @@
 "use client";
 
-import { ArrowRight, ChevronRight, FolderOpen, Sparkles } from "lucide-react";
+import { ChevronDown, Dices, Flame } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ProviderBanner, useTextProvider } from "@/components/ProviderBanner";
-import { Badge, Button, ButtonLink, Card } from "@/components/ui";
-import { api } from "@/lib/api";
-import { formatWhen, useLoad } from "@/lib/hooks";
-import { GENERATORS, PIPELINE } from "@/lib/modules";
-import type { Capability } from "@/lib/types";
+import { useRef, useState } from "react";
+import { useCapability, useJobRunner } from "@/components/studio";
+import { DELIVERIES, INTENSITIES, KINDS, STYLES, TrollProgress, TrollResult } from "@/components/troll";
+import { Badge, Button, Notice } from "@/components/ui";
+import { api, errorMessage } from "@/lib/api";
+import type { Job, TrollRequest } from "@/lib/types";
 
-function CapabilityBadge({ capability }: { capability: Capability | undefined }) {
-  if (!capability) return null;
-  if (!capability.configured) return <Badge tone="danger">Needs setup</Badge>;
-  if (capability.is_mock) return <Badge tone="mock">Mock</Badge>;
-  return capability.is_ai ? <Badge tone="grape">AI</Badge> : <Badge tone="live">Built-in</Badge>;
-}
-
-const IDEAS = [
-  "My flatmate who 'forgets' to buy toilet paper",
-  "A crypto guru who lives with his mum",
-  "The printer that only breaks before deadlines",
+const PLACEHOLDERS = [
+  "My friend Dave thinks he's rich but borrows money every Friday",
+  "Sam replies 'on my way' while still in the shower",
+  "Our group chat has been 'planning' a trip since 2021",
 ];
 
-export default function StudioPage() {
-  const router = useRouter();
-  const [prompt, setPrompt] = useState("");
-  const provider = useTextProvider();
-  const projects = useLoad(api.projects);
-  const capabilities = useLoad(api.capabilities);
+const DEFAULTS: TrollRequest = {
+  situation: "",
+  kind: "diss_track",
+  style: "trap",
+  intensity: "savage",
+  delivery: "cocky",
+  target: "",
+  names: [],
+  rapper_name: "",
+  explicit: false,
+};
 
-  const start = (text: string) => router.push(`/lyrics?prompt=${encodeURIComponent(text.trim())}`);
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-3.5 py-2 text-sm font-medium transition ${
+        active ? "border-volt bg-volt text-ink shadow-[0_0_20px_-6px] shadow-volt" : "border-line bg-panel/80 text-fg hover:border-grape/60"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-3 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-grape text-xs text-white">{n}</span>
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+/** One honest line about what will do the work, without the jargon. */
+function Engines({ kind }: { kind: string }) {
+  const text = useCapability("text");
+  const voice = useCapability("voice");
+  const music = useCapability("music");
+  if (text.error) return <Notice>{text.error}</Notice>;
+  const needsWords = kind !== "funny_beat";
+  const words = text.capability;
+  if (needsWords && words && !words.configured) {
+    return (
+      <Notice tone="info">
+        <strong>No AI is writing jokes yet.</strong> Pick a text model in{" "}
+        <Link href="/settings" className="underline">
+          AI Settings
+        </Link>{" "}
+        (Pollinations is free and needs no key). Funny Beat works without one.
+      </Notice>
+    );
+  }
+  return (
+    <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+      {needsWords && words && (
+        <>
+          Jokes by <span className="font-mono text-fg">{words.model ?? words.provider}</span>
+          {words.is_mock ? <Badge tone="mock">Mock, not real AI</Badge> : <Badge tone="grape">AI</Badge>}
+        </>
+      )}
+      {music.capability && (
+        <>
+          · Beat by <span className="font-mono text-fg">{music.capability.provider}</span>
+          {music.capability.is_ai ? <Badge tone="grape">AI</Badge> : <Badge>Built-in</Badge>}
+        </>
+      )}
+      {needsWords && voice.capability && (
+        <>
+          · Voice by <span className="font-mono text-fg">{voice.capability.provider}</span>
+          <Badge tone="mock">Spoken, not sung</Badge>
+        </>
+      )}
+      <Link href="/settings" className="underline underline-offset-2 hover:text-fg">
+        change
+      </Link>
+    </p>
+  );
+}
+
+export default function RoastPage() {
+  const [form, setForm] = useState<TrollRequest>(DEFAULTS);
+  const [namesText, setNamesText] = useState("");
+  const [withVideo, setWithVideo] = useState(false);
+  const [more, setMore] = useState(false);
+  const [result, setResult] = useState<Job | null>(null);
+  const [lastProject, setLastProject] = useState<string | null>(null);
+  const [helperError, setHelperError] = useState<string | null>(null);
+  const [placeholder] = useState(() => PLACEHOLDERS[Math.floor(Math.random() * PLACEHOLDERS.length)]);
+  const runner = useJobRunner();
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  const set = <K extends keyof TrollRequest>(key: K, value: TrollRequest[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const beatOnly = form.kind === "funny_beat";
+  const styles = STYLES.filter((s) => beatOnly || !s.beatOnly);
+  const ready = form.situation.trim().length >= 3 && (form.kind !== "group_roast" || namesText.split(",").some((n) => n.trim()));
+
+  async function generate(projectId: string | null) {
+    const request: TrollRequest = {
+      ...form,
+      situation: form.situation.trim(),
+      target: form.target?.trim() || null,
+      rapper_name: form.rapper_name?.trim() || null,
+      names: form.kind === "group_roast" ? namesText.split(",").map((n) => n.trim()).filter(Boolean) : [],
+      style: !beatOnly && STYLES.find((s) => s.id === form.style)?.beatOnly ? "trap" : form.style,
+    };
+    setResult(null);
+    resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const done = await runner.run(() => api.troll(request, projectId, { with_video: withVideo && form.kind !== "meme_video" }));
+    if (done) {
+      setResult(done);
+      setLastProject(done.project_id);
+    }
+  }
+
+  async function randomize() {
+    setHelperError(null);
+    try {
+      const idea = await api.randomTroll();
+      setForm((f) => ({ ...f, ...idea, target: idea.target ?? "", rapper_name: idea.rapper_name ?? "" }));
+      setResult(null);
+    } catch (reason) {
+      setHelperError(errorMessage(reason));
+    }
+  }
+
+  async function newRapperName() {
+    setHelperError(null);
+    try {
+      set("rapper_name", (await api.rapperName()).name);
+    } catch (reason) {
+      setHelperError(errorMessage(reason));
+    }
+  }
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-10">
       <section className="rise">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-grape">
-          Open-source AI music studio
-        </p>
-        <h1 className="font-display text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
-          TURN ANY ROAST
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-grape">Roast it. Rap it. Release it.</p>
+        <h1 className="font-display text-4xl font-black leading-[1.02] tracking-tight sm:text-6xl">
+          WHO ARE WE
           <br />
-          INTO A <span className="text-gradient">BANGER.</span>
+          <span className="text-gradient">ROASTING?</span>
         </h1>
-        <p className="mt-5 max-w-xl text-lg text-muted">
-          Generate lyrics, beats, songs and music videos with AI.
+        <p className="mt-4 max-w-xl text-base text-muted sm:text-lg">
+          Type what your friend did. Pick a vibe. Hit the button. Send the result to the group chat.
         </p>
+      </section>
 
-        <form
-          className="mt-8 flex max-w-2xl flex-col gap-2 rounded-2xl border border-line bg-panel/80 p-2 shadow-2xl shadow-grape/10 focus-within:border-grape/60 sm:flex-row"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (prompt.trim().length >= 3) start(prompt);
-          }}
-        >
-          <input
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder="What are we roasting today?"
-            aria-label="Song idea"
-            className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-base outline-none placeholder:text-muted/60"
+      <form
+        className="space-y-8"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (ready && !runner.busy) generate(null);
+        }}
+      >
+        <Step n={1} title="Spill the tea">
+          <textarea
+            value={form.situation}
+            onChange={(e) => set("situation", e.target.value)}
+            placeholder={placeholder}
+            aria-label="What did they do?"
+            rows={3}
+            maxLength={600}
+            className="control !rounded-2xl !p-4 !text-lg leading-snug"
           />
-          <Button type="submit" variant="primary" disabled={prompt.trim().length < 3}>
-            <Sparkles size={16} /> Write the lyrics
-          </Button>
-        </form>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {IDEAS.map((idea) => (
-            <button
-              key={idea}
-              type="button"
-              onClick={() => start(idea)}
-              className="rounded-full border border-line px-3 py-1 text-xs text-muted transition hover:border-grape/60 hover:text-fg"
-            >
-              {idea}
-            </button>
-          ))}
-        </div>
-      </section>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <input
+              value={form.target ?? ""}
+              onChange={(e) => set("target", e.target.value)}
+              placeholder="Their name (optional)"
+              aria-label="Their name"
+              maxLength={40}
+              className="control !w-auto min-w-0 flex-1 sm:max-w-xs"
+            />
+            <Button onClick={randomize}>
+              <Dices size={16} /> Random troll
+            </Button>
+          </div>
+          {form.kind === "group_roast" && (
+            <input
+              value={namesText}
+              onChange={(e) => setNamesText(e.target.value)}
+              placeholder="Everyone in the chat, separated by commas: Dave, Sam, Priya"
+              aria-label="Names in the group chat"
+              className="control mt-2"
+            />
+          )}
+        </Step>
 
-      <ProviderBanner {...provider} />
-
-      <section>
-        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="font-display text-lg font-semibold">Make one thing</h2>
-          <p className="text-sm text-muted">Every module stands alone. No wizard.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {GENERATORS.map((module, index) => {
-            const Icon = module.icon;
-            return (
-              <Link
-                key={module.href}
-                href={module.href}
-                style={{ animationDelay: `${index * 50}ms` }}
-                className="rise group relative overflow-hidden rounded-2xl border border-line bg-panel/80 p-5 transition duration-200 hover:-translate-y-0.5 hover:border-grape/60 hover:shadow-xl hover:shadow-grape/10"
-              >
-                <span className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-grape/20 opacity-0 blur-2xl transition group-hover:opacity-100" />
-                <div className="mb-5 flex items-start justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-grape to-grape-deep text-white">
-                    <Icon size={20} />
+        <Step n={2} title="What are we making?">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {KINDS.map((kind) => {
+              const active = form.kind === kind.id;
+              return (
+                <button
+                  key={kind.id}
+                  type="button"
+                  onClick={() => set("kind", kind.id)}
+                  aria-pressed={active}
+                  className={`rounded-2xl border p-3 text-left transition sm:p-4 ${
+                    active ? "border-volt bg-volt/10 shadow-[0_0_30px_-12px] shadow-volt" : "border-line bg-panel/80 hover:border-grape/60"
+                  }`}
+                >
+                  <span className="text-2xl" aria-hidden>
+                    {kind.emoji}
                   </span>
-                  <CapabilityBadge capability={capabilities.data?.find((c) => c.kind === module.provider)} />
-                </div>
-                <h3 className="flex items-center gap-1 font-semibold">
-                  {module.title}
-                  <ArrowRight size={15} className="-translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">{module.blurb}</p>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
+                  <span className="mt-1 block font-display text-sm font-bold">{kind.label}</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted">{kind.blurb}</span>
+                </button>
+              );
+            })}
+          </div>
+        </Step>
 
-      <section>
-        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="font-display text-lg font-semibold">Or the whole production</h2>
-          <p className="text-sm text-muted">Skip, redo or reuse any stage.</p>
-        </div>
-        <Card className="overflow-x-auto p-5">
-          <ol className="flex min-w-max items-center gap-2">
-            {PIPELINE.map((stage, index) => (
-              <li key={stage.label} className="flex items-center gap-2">
-                <Link href={stage.href} className="rounded-xl border border-volt/40 bg-volt/5 px-4 py-2.5 transition hover:border-volt">
-                  <p className="font-display text-xs font-semibold uppercase">{stage.label}</p>
-                </Link>
-                {index < PIPELINE.length - 1 && <ChevronRight size={16} className="text-line" />}
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 text-sm text-muted">
-            Every stage produces a real file you can play and download. What does the work at each stage is shown on
-            its page and chosen in Model Settings.
-          </p>
-        </Card>
-      </section>
-
-      <section>
-        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="font-display text-lg font-semibold">Recent projects</h2>
-          <Link href="/projects" className="text-sm text-muted hover:text-fg">
-            All projects →
-          </Link>
-        </div>
-        {projects.data && projects.data.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {projects.data.slice(0, 3).map((project) => (
-              <Link
-                key={project.id}
-                href={`/projects/${project.id}`}
-                className="rounded-2xl border border-line bg-panel/80 p-5 transition hover:border-grape/60"
-              >
-                <p className="flex items-center gap-2 font-semibold">
-                  <FolderOpen size={16} className="text-grape" /> {project.name}
-                </p>
-                <p className="mt-2 text-xs text-muted">
-                  {Object.entries(project.asset_counts).map(([kind, n]) => `${n} ${kind}`).join(" · ") || "Empty"} · updated{" "}
-                  {formatWhen(project.updated_at)}
-                </p>
-              </Link>
+        <Step n={3} title="Pick the vibe">
+          <div className="flex flex-wrap gap-2">
+            {styles.map((style) => (
+              <Chip key={style.id} active={form.style === style.id} onClick={() => set("style", style.id)}>
+                <span aria-hidden>{style.emoji}</span> {style.label}
+              </Chip>
             ))}
           </div>
-        ) : (
-          <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <p className="text-sm text-muted">
-              {projects.loading
-                ? "Loading projects…"
-                : projects.error
-                  ? "Projects are unavailable while the backend is offline."
-                  : "No projects yet. A project keeps a song's lyrics, beats and videos together."}
-            </p>
-            <ButtonLink href="/projects">New project</ButtonLink>
-          </Card>
+          {!beatOnly && (
+            <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-lg">
+              {INTENSITIES.map((level) => {
+                const active = form.intensity === level.id;
+                return (
+                  <button
+                    key={level.id}
+                    type="button"
+                    onClick={() => set("intensity", level.id)}
+                    aria-pressed={active}
+                    className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                      active
+                        ? level.id === "brutal"
+                          ? "border-danger bg-danger/15"
+                          : "border-volt bg-volt/10"
+                        : "border-line bg-panel/80 hover:border-grape/60"
+                    }`}
+                  >
+                    <span className="block text-xl" aria-hidden>
+                      {level.emoji}
+                    </span>
+                    <span className="block text-sm font-bold">{level.label}</span>
+                    <span className="block text-[11px] text-muted">{level.blurb}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMore(!more)}
+            aria-expanded={more}
+            className="mt-4 inline-flex items-center gap-1 text-sm text-muted hover:text-fg"
+          >
+            <ChevronDown size={15} className={`transition ${more ? "rotate-180" : ""}`} /> More fun settings
+          </button>
+          {more && (
+            <div className="mt-3 space-y-4 rounded-2xl border border-line bg-panel/60 p-4">
+              {!beatOnly && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted">Delivery</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DELIVERIES.map((d) => (
+                      <Chip key={d.id} active={form.delivery === d.id} onClick={() => set("delivery", d.id)}>
+                        {d.label}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted">Your rapper name</p>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    value={form.rapper_name ?? ""}
+                    onChange={(e) => set("rapper_name", e.target.value)}
+                    placeholder="Leave empty for a surprise"
+                    maxLength={40}
+                    aria-label="Your rapper name"
+                    className="control !w-auto min-w-0 flex-1 sm:max-w-xs"
+                  />
+                  <Button onClick={newRapperName}>
+                    <Dices size={15} /> Name me
+                  </Button>
+                </div>
+              </div>
+              {!beatOnly && (
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={!!form.explicit} onChange={(e) => set("explicit", e.target.checked)} className="accent-volt" />
+                    Uncensored (swearing allowed)
+                  </label>
+                  {form.kind !== "meme_video" && (
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={withVideo} onChange={(e) => setWithVideo(e.target.checked)} className="accent-volt" />
+                      Also make a meme video
+                    </label>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </Step>
+
+        {helperError && <Notice>{helperError}</Notice>}
+
+        <div className="space-y-3">
+          <button
+            type="submit"
+            disabled={!ready || runner.busy}
+            className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-volt px-6 py-5 font-display text-xl font-black uppercase tracking-wide text-ink shadow-[0_0_40px_-10px] shadow-volt transition hover:scale-[1.01] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100 sm:text-2xl"
+          >
+            <Flame size={26} className="transition group-hover:rotate-12" />
+            {runner.busy ? "Cooking…" : "Generate"}
+          </button>
+          <Engines kind={form.kind} />
+        </div>
+      </form>
+
+      <div ref={resultRef} className="scroll-mt-20 space-y-4">
+        {(runner.busy || runner.error) && <TrollProgress runner={runner} />}
+        {result && !runner.busy && (
+          <TrollResult job={result} regenerating={runner.busy} onRegenerate={() => generate(lastProject)} />
         )}
-      </section>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, computed_fiel
 
 from backend.core import security
 from troll_music_ai.types import BattleRequest, BeatRequest, LyricsRequest, RewriteMode, SectionType
+from troll_music_ai.troll import TrollRequest
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -202,6 +203,13 @@ class GenerateSongBody(BaseModel):
     duration_seconds: float | None = Field(default=None, ge=10, le=300)  # model mode
 
 
+class VideoIntro(BaseModel):
+    """A dramatic opening title card: '<presenter> PRESENTS <title>'."""
+
+    presenter: str = Field(min_length=1, max_length=40)
+    title: str | None = Field(default=None, max_length=120)
+
+
 class GenerateVideoBody(BaseModel):
     project_id: str | None = None
     audio_asset_id: str | None = None
@@ -212,6 +220,7 @@ class GenerateVideoBody(BaseModel):
     subtitles: bool = True
     duration_seconds: float | None = Field(default=None, ge=3, le=600)  # only without audio
     notes: str | None = Field(default=None, max_length=500)
+    intro: VideoIntro | None = None
 
 
 class GenerateArtworkBody(BaseModel):
@@ -223,6 +232,18 @@ class GenerateArtworkBody(BaseModel):
     style: str = Field(default="cartoon", max_length=60)
     character: str | None = Field(default=None, max_length=300)
     notes: str | None = Field(default=None, max_length=500)
+    # Set to turn the picture into a fake album cover: artist, title and a parody sticker.
+    artist: str | None = Field(default=None, max_length=40)
+
+
+class TrollBody(BaseModel):
+    """One button: the whole meme, from the situation to the shareable file."""
+
+    request: TrollRequest
+    project_id: str | None = None
+    # Meme video and funny beat always render their own extras; these add them to the rest.
+    with_video: bool = False
+    with_cover: bool = True
 
 
 # ------------------------------- voices ----------------------------------- #
