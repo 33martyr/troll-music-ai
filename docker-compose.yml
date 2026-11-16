@@ -1,0 +1,53 @@
+# NOTE: this stack has not been tested yet. See docker/README.md.
+#
+#   cp .env.example .env    # choose a text provider
+#   docker compose up --build
+#
+# Studio: http://localhost:3000   API: http://localhost:8000/docs
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: troll
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-troll-dev-only}
+      POSTGRES_DB: troll
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U troll"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: .
+    env_file: .env
+    environment:
+      TROLL_DATABASE_URL: postgresql+psycopg://troll:${POSTGRES_PASSWORD:-troll-dev-only}@db:5432/troll
+      TROLL_STORAGE_DIR: /app/data/storage
+    volumes:
+      - storage:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # To reach Ollama running on the host, set in .env:
+    #   TROLL_LLM_BASE_URL=http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: ../../docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:
+  storage:

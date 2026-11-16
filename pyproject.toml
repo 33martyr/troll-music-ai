@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "troll-music-backend"
+version = "0.2.0"
+description = "FastAPI backend for TROLL-MUSIC-AI."
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "troll-music-ai",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0",
+    "python-multipart>=0.0.9",  # file uploads
+    "numpy>=1.26",
+    "pillow>=10",               # title cards, artwork
+    "pyttsx3>=2.90",            # built-in system speech
+    "imageio-ffmpeg>=0.5",      # bundled FFmpeg binary, used when none is on PATH
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+dev = ["pytest>=8", "httpx>=0.27"]
+musicgen = ["torch>=2.2", "transformers>=4.40"]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

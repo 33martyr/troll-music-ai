@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-ink: #0a0a0f;
+  --color-panel: #12121a;
+  --color-raised: #1a1a25;
+  --color-line: #262635;
+  --color-fg: #eeeef6;
+  --color-muted: #9595ad;
+  --color-grape: #a259ff;
+  --color-grape-deep: #6d28d9;
+  --color-volt: #c8ff3e;
+  --color-cyber: #38e1ff;
+  --color-danger: #ff5c7a;
+  --color-amber: #ffc24b;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-unbounded), var(--font-geist-sans), sans-serif;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--color-ink);
+}
+
+body {
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(900px 500px at 12% -10%, rgb(162 89 255 / 0.16), transparent 60%),
+    radial-gradient(700px 420px at 105% 8%, rgb(56 225 255 / 0.07), transparent 60%),
+    var(--color-ink);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgb(200 255 62 / 0.3);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-volt);
+  outline-offset: 2px;
+}
+
+/* Shared form-control look, used by <input>, <select> and <textarea>. */
+.control {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid var(--color-line);
+  background: rgb(10 10 15 / 0.6);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-fg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.control::placeholder {
+  color: rgb(149 149 173 / 0.6);
+}
+.control:hover {
+  border-color: #38384d;
+}
+.control:focus {
+  outline: none;
+  border-color: var(--color-grape);
+  box-shadow: 0 0 0 3px rgb(162 89 255 / 0.2);
+}
+select.control {
+  appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239595ad' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+}
+
+.text-gradient {
+  background: linear-gradient(100deg, var(--color-grape) 0%, #e879f9 45%, var(--color-volt) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.rise {
+  animation: rise 0.4s ease-out both;
+}
+
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar {
+  transform-origin: bottom;
+  animation: eq 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .eq-bar {
+    animation: none;
+  }
+}
