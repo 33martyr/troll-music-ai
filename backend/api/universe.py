@@ -193,7 +193,7 @@ def update_rapper(rapper_id: str, body: RapperPatch, session: SessionDep, storag
 
 
 @router.delete("/universe/rappers/{rapper_id}", status_code=204)
-def delete_rapper(rapper_id: str, session: SessionDep):
+def delete_rapper(rapper_id: str, session: SessionDep, storage: StorageDep):
     """Deletes the rapper and their rivalries. Tracks already made stay in My Trolls."""
     rapper = _load_rapper(session, rapper_id)
     rivalries = list(session.scalars(select(Rivalry).where((Rivalry.rapper_a_id == rapper.id) | (Rivalry.rapper_b_id == rapper.id))))
@@ -209,6 +209,7 @@ def delete_rapper(rapper_id: str, session: SessionDep):
         other = session.get(Rapper, other_id)
         if other:
             universe_jobs.recount(session, other)
+            _redraw_card(session, storage, other)
     session.commit()
     return Response(status_code=204)
 
@@ -280,7 +281,7 @@ def get_rivalry(rivalry_id: str, session: SessionDep):
 
 
 @router.delete("/universe/rivalries/{rivalry_id}", status_code=204)
-def delete_rivalry(rivalry_id: str, session: SessionDep):
+def delete_rivalry(rivalry_id: str, session: SessionDep, storage: StorageDep):
     rivalry = _load_rivalry(session, rivalry_id)
     ids = (rivalry.rapper_a_id, rivalry.rapper_b_id)
     for result in session.scalars(select(RivalryResult).where(RivalryResult.rivalry_id == rivalry.id)):
@@ -288,7 +289,9 @@ def delete_rivalry(rivalry_id: str, session: SessionDep):
     session.delete(rivalry)
     session.flush()
     for rapper_id in ids:
-        universe_jobs.recount(session, session.get(Rapper, rapper_id))
+        rapper = session.get(Rapper, rapper_id)
+        universe_jobs.recount(session, rapper)
+        _redraw_card(session, storage, rapper)
     session.commit()
     return Response(status_code=204)
 
@@ -322,7 +325,7 @@ def rivalry_track(rivalry_id: str, body: RivalryTrackBody, session: SessionDep, 
 
 
 @router.post("/universe/rivalries/{rivalry_id}/settle")
-def settle(rivalry_id: str, body: SettleBody, session: SessionDep):
+def settle(rivalry_id: str, body: SettleBody, session: SessionDep, storage: StorageDep):
     """Record who won a battle: an explicit pick, else the friends' votes, else
     the AI judges' latest scorecard. Then update records and titles."""
     from backend.api.battle import _latest_scorecard, _lyrics_of, _tally
@@ -358,6 +361,7 @@ def settle(rivalry_id: str, body: SettleBody, session: SessionDep):
     session.flush()
     for rapper in (a, b):
         universe_jobs.recount(session, rapper)
+        _redraw_card(session, storage, rapper)  # the card prints the record and titles
     session.commit()
     return _rivalry_out(session, rivalry)
 

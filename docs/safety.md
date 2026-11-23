@@ -25,6 +25,11 @@ TROLL-MUSIC-AI is for comedy. These are the rules the project is built around.
   real logos or platform branding, and each carries a "PARODY" mark.
 - **Group chat details stay minimal.** Only the names, nicknames and descriptions the user types are sent to
   the text model; the page says so.
+- **Troll Universe rappers are fictional and private.** The prompt forbids basing a rapper on a real person or
+  artist or using real artists' names. There are no public profiles; rappers, cards and rivalries stay in this
+  installation and can be deleted at any time.
+- **Rate limits are respected.** When a free provider says to wait (Pollinations: one reply per 45 s per IP),
+  the text adapter waits and retries up to twice (60 s max per wait) instead of hammering it.
 - **Rap battles are between fictional characters.** The battle prompt tells the model the two rappers are
   made up and to keep it a roast of their invented traits, never a real person.
 - **Optional API key.** `TROLL_API_KEY` puts every route except health behind a bearer key. Media URLs carry a

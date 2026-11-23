@@ -155,6 +155,19 @@ sam = next(s for s in client.get_asset(group.meta["troll"]["lyrics_asset_id"]).l
 client.remix(group, regenerate_sections=[sam.id])   # only Sam's verse is rewritten
 ```
 
+Troll Universe and Roast Awards:
+
+```python
+taxman = client.generate_rapper("a nervous accountant who raps only about taxes")
+gymbro = client.create_rapper("Reps the Rhyme", personality="counts reps in every bar", style="drill")
+client.paint_rapper(gymbro)                                  # portrait + collectible card
+rivalry = client.create_rivalry(taxman, gymbro, "Spreadsheets vs squats")
+battle = client.rivalry_track(rivalry)                       # or kind="diss", from_rapper=taxman
+client.score_battle(battle)
+print(client.settle_battle(rivalry, battle)["record"])       # votes first, then the judges
+client.roast_awards(battle, count=3)
+```
+
 Also: `random_troll()`, `templates()`, `battle()`, `save_lyrics()`, `asset_history()`, `restore_lyrics_version()`.
 
 ## Your own provider

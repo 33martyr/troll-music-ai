@@ -74,6 +74,7 @@ def test_rivalry_battles_settle_into_records_and_titles(studio):  # noqa: F811
     client.post(f"/api/battles/{song_id}/score")  # mock judges always pick rapper A
     settled = client.post(f"/api/universe/rivalries/{rivalry['id']}/settle", json={"song_asset_id": song_id}).json()
     assert settled["record"] == {"a": 1, "b": 0, "draws": 0} and settled["history"][0]["source"] == "judges"
+    assert settled["rapper_a"]["card"]["id"] != a["card"]["id"]  # card reprinted with the new record
     # Friends' votes beat the judges.
     client.post(f"/api/battles/{song_id}/votes", json={"choice": "Sir Buffering", "voter_id": "friend-0001"})
     settled = client.post(f"/api/universe/rivalries/{rivalry['id']}/settle", json={"song_asset_id": song_id}).json()

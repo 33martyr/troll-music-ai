@@ -106,3 +106,23 @@ def test_check_never_raises():
 
     assert asyncio.run(provider_for(refuse).check()).ok is False
     assert "key" in asyncio.run(provider_for(unauthorized).check()).detail
+
+
+def test_rate_limits_are_waited_out_when_the_server_says_how_long():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(402, text="Free limit reached: 1 reply every 45 seconds per IP. Retry after 0s")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    assert asyncio.run(provider_for(handler).generate_text(REQUEST)).text == "ok" and len(calls) == 2
+
+    # Too long a wait, or no retries left: fail with the server's message.
+    slow = lambda request: httpx.Response(429, headers={"retry-after": "600"}, text="busy")  # noqa: E731
+    with pytest.raises(ProviderResponseError, match="HTTP 429"):
+        asyncio.run(provider_for(slow).generate_text(REQUEST))
+    payment = lambda request: httpx.Response(402, text="pay up")  # noqa: E731  (402 without a wait is not retried)
+    with pytest.raises(ProviderResponseError, match="HTTP 402"):
+        asyncio.run(provider_for(payment).generate_text(REQUEST))

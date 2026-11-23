@@ -21,6 +21,11 @@ download, remix or edit line by line.
   scorecard (punchlines, flow, creativity, humor, entertainment) shown as an opinion, and friend voting.
 - **Meme Factory:** 9:16 / 1:1 / 16:9 videos (Stories, TikTok, Shorts), the cover, a fake concert poster, a fake
   award from "The Trollies", a parody "now playing" card and a reaction meme, in 5 themes, downloadable as a ZIP.
+- **Troll Universe:** invent fictional rappers (by AI from an idea, or from word lists without one) with stats,
+  a catchphrase, a bio, a portrait and a collectible card; start rivalries, run battles and diss tracks between
+  them, settle results (votes first, then the AI judges) and crown a champion at 3 wins. Private to you.
+- **Roast Awards:** the text model gives a track awards from a fixed list ("Most Emotional Damage", ...) with a
+  reason quoting the lyrics; each becomes a shareable award card, labelled as an AI opinion.
 - **Workshop:** the individual tools (lyrics, beats, songs, voices, videos, covers, battles) for hand-tuning.
 
 Under the hood: a **Python toolkit** (`troll_music_ai`) with a provider registry, the lyrics engine and a REST

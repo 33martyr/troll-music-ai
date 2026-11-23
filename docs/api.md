@@ -95,6 +95,25 @@ Remix also takes `regenerate_sections` (section ids) and `section_instruction`: 
 | `GET` | `/api/battles/{asset_id}/votes?voter_id=` | `{"counts", "total", "your_vote"}`. |
 | `POST` | `/api/battles/{asset_id}/votes` | `{"choice": rapper name or "draw", "voter_id"}`. The same voter id changes its vote. No accounts yet, so this prevents accidental double votes only. |
 
+### Troll Universe and Roast Awards
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/universe/rappers` | List rappers, or create one you wrote (`name`, `personality`, `style`, `delivery`, `catchphrase`, `bio`, `stats`, `voice`). |
+| `POST` | `/api/universe/rappers/generate` | `{"idea"?}`: the text model invents a fictional rapper (`origin: "ai"`). With no text model, word lists do (`origin: "builtin"`, not AI). |
+| `GET` / `PATCH` / `DELETE` | `/api/universe/rappers/{id}` | Read, edit (the card is reprinted), or retire (their rivalries go too; tracks stay). |
+| `POST` | `/api/universe/rappers/{id}/portrait` | Job: a portrait from the image provider, then a new collectible card. |
+| `GET` / `POST` | `/api/universe/rivalries` | List, or start one: `{"rapper_a_id", "rapper_b_id", "tagline"}`. Each rivalry gets its own project. |
+| `GET` / `DELETE` | `/api/universe/rivalries/{id}` | Rappers, head-to-head record, champion and battle history. |
+| `POST` | `/api/universe/rivalries/{id}/tracks` | Job: `{"kind": "battle"}` (both rappers, their voices, Knockout round) or `{"kind": "diss", "from_id"}`; also `style`, `intensity`, `with_video`, `situation`. |
+| `POST` | `/api/universe/rivalries/{id}/settle` | `{"song_asset_id", "winner"?}`: a rapper id or `draw`; without it, the friends' votes decide, else the AI judges' scorecard. `422 undecided` if neither exists. Records, titles and cards update. |
+| `POST` | `/api/universe/rivalries/{id}/poster` | A rivalry fight poster (Pillow). |
+| `POST` | `/api/awards/{asset_id}` | Job: `{"count": 1-4, "theme"}`. The text model picks awards from a fixed list with reasons; each becomes an award card with `meta.judged_by`. |
+| `GET` | `/api/awards/{asset_id}` | The award cards made for that track. |
+
+A champion is the first rapper to 3 wins in a rivalry while ahead on wins; the title shows on their card.
+Stats (1-99) are invented for fun; wins, losses and titles come only from settled battles.
+
 `POST /api/assets/zip` with `{"asset_ids", "name"}` downloads those files as one ZIP.
 
 `TrollRequest`: `situation` (required), `kind` (`diss_track`, `roast`, `rap_battle`, `meme_song`, `group_roast`,

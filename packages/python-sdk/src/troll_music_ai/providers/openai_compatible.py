@@ -6,6 +6,9 @@ Groq, OpenAI itself and most other hosted LLM APIs.
 
 from __future__ import annotations
 
+import asyncio
+import re
+
 import httpx
 
 from ..errors import ProviderResponseError, ProviderUnavailableError
@@ -33,7 +36,11 @@ class OpenAICompatibleProvider(TextGenerationProvider):
         extra_body: dict | None = None,
         min_max_tokens: int = 0,
         transport: httpx.AsyncBaseTransport | None = None,
+        rate_limit_retries: int = 2,
+        max_retry_wait: float = 60.0,
     ) -> None:
+        self._rate_limit_retries = max(0, rate_limit_retries)
+        self._max_retry_wait = max_retry_wait
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._api_key = api_key
@@ -79,17 +86,23 @@ class OpenAICompatibleProvider(TextGenerationProvider):
         if request.json_mode:
             payload["response_format"] = {"type": "json_object"}
 
-        try:
-            async with self._client() as client:
-                response = await client.post("/chat/completions", json=payload)
-        except httpx.TimeoutException as exc:
-            raise ProviderUnavailableError(
-                f"{self._name} timed out after {self._timeout:.0f}s at {self._base_url}."
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise ProviderUnavailableError(
-                f"Could not reach {self._name} at {self._base_url}. Is it running?"
-            ) from exc
+        for attempt in range(self._rate_limit_retries + 1):
+            try:
+                async with self._client() as client:
+                    response = await client.post("/chat/completions", json=payload)
+            except httpx.TimeoutException as exc:
+                raise ProviderUnavailableError(
+                    f"{self._name} timed out after {self._timeout:.0f}s at {self._base_url}."
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailableError(
+                    f"Could not reach {self._name} at {self._base_url}. Is it running?"
+                ) from exc
+            # Free tiers (Pollinations) rate-limit per IP and say how long to wait.
+            wait = _retry_after(response)
+            if wait is None or attempt == self._rate_limit_retries or wait > self._max_retry_wait:
+                break
+            await asyncio.sleep(wait)
 
         if response.status_code >= 400:
             raise ProviderResponseError(
@@ -142,3 +155,19 @@ def _error_snippet(response: httpx.Response) -> str:
         return str(message)[:300]
     except ValueError:
         return response.text[:300]
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    """Seconds to wait before retrying a rate-limited request, or None if it is not one."""
+    if response.status_code not in (402, 429, 503):
+        return None
+    header = response.headers.get("retry-after")
+    if header:
+        try:
+            return float(header) + 1
+        except ValueError:
+            pass
+    match = re.search(r"retry after (\d+(?:\.\d+)?)\s*s", response.text[:500], flags=re.IGNORECASE)
+    if match:
+        return float(match.group(1)) + 1
+    return None if response.status_code == 402 else 5.0
