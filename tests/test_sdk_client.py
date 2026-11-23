@@ -136,3 +136,65 @@ def test_one_button_troll_through_the_sdk(settings):
             assert len(song.job.result_asset_ids) == 5  # lyrics, vocals, beat, song, cover
 
     asyncio.run(run())
+
+
+def test_remix_punchlines_and_versions_through_the_sdk(settings):
+    async def run():
+        async with connect(settings) as client:
+            assert len(await client.templates()) == 14
+            song = await client.troll("Dave is always late", kind="diss_track", template="late", target="Dave")
+            lyrics = await client.get_asset(song.meta["troll"]["lyrics_asset_id"])
+            section = lyrics.lyrics.sections[1]
+            reply = await client.punchlines(lyrics, section.id, 0, count=3)
+            assert len(reply["options"]) == 3
+
+            edited = lyrics.lyrics.model_copy(deep=True)
+            edited.sections[1].lines[0] = reply["options"][0]
+            saved = await client.save_lyrics(lyrics, edited)
+            assert saved.version == 2
+            restored = await client.restore_lyrics_version(lyrics)
+            assert restored.version == 3 and len(await client.asset_history(restored)) == 3
+
+            remixed = await client.remix(song, style="opera")
+            assert remixed.meta["troll"]["lyrics_reused"] and remixed.meta["troll"]["style"] == "opera"
+
+    asyncio.run(run())
+
+
+def test_battles_and_meme_factory_through_the_sdk(settings, tmp_path):
+    async def run():
+        async with connect(settings) as client:
+            song = await client.troll("Dave borrows money", kind="rap_battle", target="Dave", rapper_name="MC Receipt")
+            card = await client.score_battle(song)
+            assert card.kind == "scorecard" and card.content["winner"] == "MC Receipt"
+            tally = await client.vote(song, "Dave", "sdk-voter-0001")
+            assert tally["counts"] == {"Dave": 1}
+            assert (await client.battle(song, voter_id="sdk-voter-0001"))["votes"]["your_vote"] == "Dave"
+
+            first = await client.meme_factory(song, ["award_card", "reaction_meme"], theme="comic")
+            assert first.kind == "artwork" and len(first.job.result_asset_ids) == 2
+            archive = await client.download_zip(first.job.result_asset_ids, tmp_path / "pack.zip")
+            assert archive.read_bytes()[:2] == b"PK"
+
+    asyncio.run(run())
+
+
+def test_troll_universe_and_awards_through_the_sdk(settings):
+    async def run():
+        async with connect(settings) as client:
+            a = await client.generate_rapper("a DJ who only plays ringtones")
+            b = await client.create_rapper("Sir Buffering", personality="always loading", style="techno")
+            card = await client.paint_rapper(b)
+            assert card.meta["format"] == "rapper_card"
+            assert (await client.update_rapper(b, catchphrase="Still loading..."))["catchphrase"] == "Still loading..."
+            rivalry = await client.create_rivalry(a, b, "Who has worse taste?")
+            battle = await client.rivalry_track(rivalry)
+            result = await client.settle_battle(rivalry, battle, winner=b)
+            assert result["record"]["b"] == 1
+            awards = await client.roast_awards(battle, count=2)
+            assert awards.meta["format"] == "award_card" and len(await client.awards(battle)) == 2
+            assert (await client.rivalry_poster(rivalry)).meta["format"] == "rivalry_poster"
+            await client.delete_rapper(a)
+            assert len(await client.rappers()) == 1
+
+    asyncio.run(run())

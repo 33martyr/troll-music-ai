@@ -15,6 +15,15 @@ import type {
   ProviderUpdate,
   StockVoices,
   StudioOptions,
+  BattleInfo,
+  FactoryItem,
+  PunchlineOptions,
+  Rapper,
+  RapperStats,
+  Rivalry,
+  Scorecard,
+  VoteTally,
+  RoastTemplate,
   TrollOptions,
   TrollRequest,
   VoiceProfile,
@@ -116,6 +125,19 @@ export interface VideoBody {
   notes?: string | null;
   intro?: { presenter: string; title?: string | null } | null;
 }
+export interface RemixBody {
+  asset_id: string;
+  style?: string | null;
+  intensity?: string | null;
+  delivery?: string | null;
+  rapper_name?: string | null;
+  voice?: string | null;
+  instruction?: string | null;
+  regenerate_sections?: string[];
+  section_instruction?: string | null;
+  with_video?: boolean;
+  with_cover?: boolean;
+}
 export interface ArtworkBody {
   project_id?: string | null;
   lyrics_asset_id?: string | null;
@@ -190,6 +212,37 @@ export const api = {
 
   troll: (trollRequest: TrollRequest, projectId: string | null, extras: { with_video?: boolean; with_cover?: boolean } = {}) =>
     post<Job>("/api/troll", { project_id: projectId, request: trollRequest, ...extras }),
+  battle: (assetId: string, voterId?: string) =>
+    request<BattleInfo>(`/api/battles/${assetId}${voterId ? `?voter_id=${encodeURIComponent(voterId)}` : ""}`),
+  scoreBattle: (assetId: string) => post<Asset<Scorecard>>(`/api/battles/${assetId}/score`),
+  vote: (assetId: string, choice: string, voterId: string) =>
+    post<VoteTally>(`/api/battles/${assetId}/votes`, { choice, voter_id: voterId }),
+  memeFactory: (body: { asset_id: string; items: FactoryItem[]; theme: string; award?: string | null; line?: string | null }) =>
+    post<Job>("/api/troll/factory", body),
+  rappers: () => request<Rapper[]>("/api/universe/rappers"),
+  rapper: (id: string) => request<Rapper>(`/api/universe/rappers/${id}`),
+  generateRapper: (idea: string | null) => post<Rapper>("/api/universe/rappers/generate", { idea }),
+  createRapper: (body: Partial<Omit<Rapper, "stats">> & { name: string; stats?: RapperStats }) => post<Rapper>("/api/universe/rappers", body),
+  updateRapper: (id: string, body: Partial<Omit<Rapper, "stats">> & { stats?: RapperStats }) => patch<Rapper>(`/api/universe/rappers/${id}`, body),
+  deleteRapper: (id: string) => remove(`/api/universe/rappers/${id}`),
+  paintRapper: (id: string) => post<Job>(`/api/universe/rappers/${id}/portrait`),
+  rivalries: () => request<Rivalry[]>("/api/universe/rivalries"),
+  rivalry: (id: string) => request<Rivalry>(`/api/universe/rivalries/${id}`),
+  createRivalry: (a: string, b: string, tagline: string) =>
+    post<Rivalry>("/api/universe/rivalries", { rapper_a_id: a, rapper_b_id: b, tagline }),
+  deleteRivalry: (id: string) => remove(`/api/universe/rivalries/${id}`),
+  rivalryTrack: (id: string, body: { kind: "battle" | "diss"; from_id?: string | null; style?: string | null; intensity?: string; with_video?: boolean; situation?: string | null }) =>
+    post<Job>(`/api/universe/rivalries/${id}/tracks`, body),
+  settleBattle: (id: string, songId: string, winner: string | null) =>
+    post<Rivalry>(`/api/universe/rivalries/${id}/settle`, { song_asset_id: songId, winner }),
+  rivalryPoster: (id: string) => post<Asset>(`/api/universe/rivalries/${id}/poster`),
+  roastAwards: (assetId: string, count = 3, theme = "gold") => post<Job>(`/api/awards/${assetId}`, { count, theme }),
+  awards: (assetId: string) => request<Asset[]>(`/api/awards/${assetId}`),
+  trollTemplates: () => request<RoastTemplate[]>("/api/troll/templates"),
+  remix: (body: RemixBody) => post<Job>("/api/troll/remix", body),
+  punchlines: (assetId: string, sectionId: string, lineIndex: number, count = 5) =>
+    post<PunchlineOptions>(`/api/lyrics/${assetId}/punchlines`, { section_id: sectionId, line_index: lineIndex, count }),
+  restoreLyrics: (assetId: string) => post<LyricsAsset>(`/api/lyrics/${assetId}/restore`),
   trollOptions: () => request<TrollOptions>("/api/troll/options"),
   randomTroll: () => request<Partial<TrollRequest>>("/api/troll/random"),
   rapperName: (target?: string | null) =>
@@ -231,6 +284,17 @@ export async function waitForJob(job: Job, onUpdate: (job: Job) => void): Promis
     throw new ApiError(current.error ?? "Generation failed.", current.error_code ?? "job_failed", 0);
   }
   return current;
+}
+
+/** Download several assets as one ZIP. */
+export async function downloadZip(assetIds: string[], name: string): Promise<void> {
+  const response = await send("/api/assets/zip", { method: "POST", body: JSON.stringify({ asset_ids: assetIds, name }) });
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "troll-music-ai.zip";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 /** Fetch a file from the API and hand it to the browser as a download. */

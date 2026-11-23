@@ -26,7 +26,7 @@ function Logo() {
 function NavLink({ item, onNavigate, big }: { item: NavItem; onNavigate?: () => void; big?: boolean }) {
   const pathname = usePathname();
   const { href, label, icon: Icon } = item;
-  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const active = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}

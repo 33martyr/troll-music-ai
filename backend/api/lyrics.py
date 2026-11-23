@@ -18,6 +18,7 @@ from backend.models.schemas import (
     GenerateLyricsBody,
     ImportLyricsBody,
     JobOut,
+    PunchlinesBody,
     RegenerateSectionBody,
     RewriteLyricsBody,
     SaveLyricsBody,
@@ -26,7 +27,10 @@ from backend.models.schemas import (
 from backend.models.tables import AssetKind
 from backend.services import lyrics as lyrics_service
 from backend.services.assets import create_asset
-from troll_music_ai import LyricsParseError
+from sqlalchemy import select
+
+from backend.models.tables import Asset
+from troll_music_ai import Lyrics, LyricsParseError, LyricsRequest
 from troll_music_ai.lyrics import LyricsService, parse_plain_text
 
 router = APIRouter(prefix="/api", tags=["lyrics"])
@@ -81,6 +85,46 @@ def rewrite_lyrics(asset_id: str, body: RewriteLyricsBody, session: SessionDep, 
         session, queue, kind=lyrics_service.JOB_REWRITE, project_id=asset.project_id,
         params={"asset_id": asset.id, **body.model_dump(mode="json")},
     )
+
+
+@router.post("/lyrics/{asset_id}/punchlines")
+def punchlines(asset_id: str, body: PunchlinesBody, session: SessionDep, providers: ProvidersDep):
+    """PUNCHLINE MODE: alternatives for one line. A short, direct model call;
+    nothing is saved until the user picks one (save it with PUT /lyrics/{id})."""
+    provider = providers.require("text")
+    asset = load_asset(session, asset_id, AssetKind.LYRICS)
+    lyrics = Lyrics.model_validate(asset.content)
+    request = LyricsRequest.model_validate(asset.params) if asset.params and "prompt" in asset.params else None
+    service = LyricsService(provider, json_mode=providers.json_mode())  # type: ignore[arg-type]
+    try:
+        options, model = asyncio.run(
+            service.punchlines(lyrics, body.section_id, body.line_index, count=body.count, request=request, instruction=body.instruction)
+        )
+    except ValueError as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    section = lyrics.section(body.section_id)
+    return {
+        "current": section.lines[body.line_index] if section else None,
+        "options": options,
+        "provider": provider.info.name,
+        "model": model or provider.info.model,
+        "is_mock": provider.info.is_mock,
+    }
+
+
+@router.post("/lyrics/{asset_id}/restore", response_model=AssetOut, status_code=201)
+def restore_version(asset_id: str, session: SessionDep):
+    """Make an old version the newest one again. Every version is kept."""
+    old = load_asset(session, asset_id, AssetKind.LYRICS)
+    latest = session.scalar(select(Asset).where(Asset.root_id == old.root_id, Asset.is_latest.is_(True))) or old
+    restored = create_asset(
+        session, kind=AssetKind.LYRICS, title=old.title, project_id=old.project_id, content=old.content,
+        params=old.params, provider=old.provider, model=old.model, is_mock=old.is_mock, is_ai=old.is_ai,
+        origin="restored", parent=latest,
+    )
+    restored.meta = {"restored_from_version": old.version}
+    session.commit()
+    return restored
 
 
 @router.put("/lyrics/{asset_id}", response_model=AssetOut)

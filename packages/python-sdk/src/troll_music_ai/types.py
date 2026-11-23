@@ -174,6 +174,30 @@ class BattleRequest(BaseModel):
     language: str = Field(default="English", max_length=40)
     troll_intensity: int = Field(default=3, ge=1, le=5)
     explicit: bool = False
+    knockout: bool = Field(default=False, description="The last round is a Knockout round: each rapper's hardest verse.")
+
+
+class BattleScore(BaseModel):
+    """One rapper's marks from the AI judges: an opinion, not a measurement."""
+
+    punchlines: int = Field(ge=1, le=10)
+    flow: int = Field(ge=1, le=10)
+    creativity: int = Field(ge=1, le=10)
+    humor: int = Field(ge=1, le=10)
+    entertainment: int = Field(ge=1, le=10)
+    comment: str = ""
+
+    @property
+    def overall(self) -> float:
+        return round((self.punchlines + self.flow + self.creativity + self.humor + self.entertainment) / 5, 1)
+
+
+class Scorecard(BaseModel):
+    scores: dict[str, BattleScore]
+    winner: str | None  # None means the judges called a draw
+    announcement: str
+    best_line: str | None = None
+    meta: GenerationMeta | None = None
 
 
 # --------------------------------------------------------------------------- #

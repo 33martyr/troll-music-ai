@@ -26,6 +26,15 @@ from troll_music_ai.types import BeatRequest
 
 JOB_TROLL = "troll.generate"
 
+# Stage labels, in the order they run. The web app's timeline reads them from
+# the job's ``stage`` ("<label> · <detail>"), so keep them stable.
+STEP_WORDS = "Writing the lyrics"
+STEP_VOCALS = "Recording the vocals"
+STEP_BEAT = "Building the beat"
+STEP_MIX = "Mixing the track"
+STEP_COVER = "Designing the cover"
+STEP_VIDEO = "Rendering the video"
+
 _ENERGY = {"friendly": 3, "savage": 4, "brutal": 5}
 
 
@@ -79,28 +88,50 @@ def generate_troll(context: JobContext) -> str:
     with_video = request.kind is TrollKind.MEME_VIDEO or bool(context.params.get("with_video"))
     with_cover = bool(context.params.get("with_cover", True)) or request.kind is TrollKind.FUNNY_BEAT
     artist = request.rapper_name or rapper_name(request.target)
+    # A battle is billed as a match-up on the cover and the video's opening card.
+    billing = f"{artist} vs {request.who}" if request.kind is TrollKind.RAP_BATTLE else artist
     preset_bpm = preset_for(request.beat_genre)["bpm"]
     warnings: list[str] = []
 
-    # ---- 1. words (everything but a funny beat) ----
+    # ---- 1. words (everything but a funny beat). A remix reuses its lyrics. ----
     lyrics_asset: Asset | None = None
-    if request.kind is not TrollKind.FUNNY_BEAT:
+    reused = bool(context.params.get("lyrics_asset_id"))
+    if reused:
+        lyrics_asset = context.asset(context.params["lyrics_asset_id"], "lyrics")
+        if context.params.get("rewrite_instruction"):
+            lyrics_asset = _run(
+                context, lyrics_jobs.rewrite,
+                {"asset_id": lyrics_asset.id, "mode": "custom", "instruction": context.params["rewrite_instruction"]},
+                (0.0, 0.3), STEP_WORDS,
+            )
+        # Redo only some sections (one person's verse, the chorus); the rest is kept word for word.
+        sections = list(context.params.get("regenerate_sections") or [])
+        for index, section_id in enumerate(sections):
+            span = (0.3 * index / len(sections), 0.3 * (index + 1) / len(sections))
+            lyrics_asset = _run(
+                context, lyrics_jobs.regenerate_section,
+                {"asset_id": lyrics_asset.id, "section_id": section_id, "instruction": context.params.get("section_instruction")},
+                span, STEP_WORDS,
+            )
+    elif request.kind is not TrollKind.FUNNY_BEAT:
         if request.kind is TrollKind.RAP_BATTLE:
             battle = battle_request_for(request.model_copy(update={"rapper_name": artist}))
-            lyrics_asset = _run(context, lyrics_jobs.generate_battle, {"request": battle.model_dump(mode="json")}, (0.0, 0.3), "Writing the battle")
+            lyrics_asset = _run(context, lyrics_jobs.generate_battle, {"request": battle.model_dump(mode="json")}, (0.0, 0.3), STEP_WORDS)
         else:
-            lyrics_asset = _run(context, _write_troll, {"request": request.model_dump(mode="json")}, (0.0, 0.3), "Cooking up the disses")
+            lyrics_asset = _run(context, _write_troll, {"request": request.model_dump(mode="json")}, (0.0, 0.3), STEP_WORDS)
     title = (lyrics_asset.content or {}).get("title") if lyrics_asset else None
     title = title or beat_title(request)
 
     # ---- 2. performance: vocals first, so the beat is cut to fit them ----
     vocals: Asset | None = None
     if lyrics_asset is not None:
-        voice_b = _second_voice(context) if request.kind is TrollKind.RAP_BATTLE else None
+        voice_b = request.voice_b or (_second_voice(context) if request.kind is TrollKind.RAP_BATTLE else None)
+        section_voices = {p.name: p.voice for p in request.people if p.voice}
         vocals = _run(
             context, audio_jobs.generate_vocals,
-            {"lyrics_asset_id": lyrics_asset.id, "bpm": preset_bpm, "voice_b": voice_b},
-            (0.3, 0.55), "Warming up the mic",
+            {"lyrics_asset_id": lyrics_asset.id, "bpm": preset_bpm, "voice": request.voice, "voice_b": voice_b,
+             "section_voices": section_voices},
+            (0.3, 0.55), STEP_VOCALS,
         )
 
     # ---- 3. beat ----
@@ -117,7 +148,7 @@ def generate_troll(context: JobContext) -> str:
         context, audio_jobs.generate_beat,
         {"request": beat_request.model_dump(mode="json"), "lyrics_asset_id": lyrics_asset.id if lyrics_asset else None,
          "seed": secrets.randbelow(2**31)},
-        (0.55, 0.7), "Building the beat",
+        (0.55, 0.7), STEP_BEAT,
     )
 
     # ---- 4. mix ----
@@ -126,7 +157,7 @@ def generate_troll(context: JobContext) -> str:
         primary = _run(
             context, audio_jobs.generate_song,
             {"mode": "mix", "lyrics_asset_id": lyrics_asset.id, "beat_asset_id": beat.id, "vocals_asset_id": vocals.id, "title": title},
-            (0.7, 0.8), "Mixing the masterpiece",
+            (0.7, 0.8), STEP_MIX,
         )
     else:
         primary.title = title
@@ -137,10 +168,10 @@ def generate_troll(context: JobContext) -> str:
         try:
             cover = _run(
                 context, visual_jobs.generate_artwork,
-                {"title": title, "genre": request.style, "style": "meme", "artist": artist,
+                {"title": title, "genre": request.style, "style": "meme", "artist": billing,
                  "lyrics_asset_id": lyrics_asset.id if lyrics_asset else None,
                  "notes": f"ridiculous rapper persona {artist}, comedic, exaggerated"},
-                (0.8, 0.86 if with_video else 0.99), "Designing the album cover",
+                (0.8, 0.86 if with_video else 0.99), STEP_COVER,
             )
         except TrollMusicError as exc:
             warnings.append(f"No album cover: {exc.message}")
@@ -150,9 +181,9 @@ def generate_troll(context: JobContext) -> str:
         video = _run(
             context, visual_jobs.generate_video,
             {"audio_asset_id": primary.id, "lyrics_asset_id": lyrics_asset.id if lyrics_asset else None, "title": title,
-             "style": "meme", "aspect": "9:16", "subtitles": True, "intro": {"presenter": artist, "title": title},
+             "style": "meme", "aspect": "9:16", "subtitles": True, "intro": {"presenter": billing, "title": title},
              "notes": "meme music video, comedic scenes, dramatic and ridiculous"},
-            (0.86, 0.99), "Directing the music video",
+            (0.86, 0.99), STEP_VIDEO,
         )
 
     context.progress(0.995, "Done. Send it to the group chat.")
@@ -169,6 +200,13 @@ def generate_troll(context: JobContext) -> str:
             "cover_asset_id": cover.id if cover else None,
             "video_asset_id": video.id if video else None,
             "warnings": warnings,
+            "lyrics_reused": reused,
+            "remix_of": context.params.get("remix_of"),
+            "rivalry_id": context.params.get("rivalry_id"),
+            # Everything needed to make it again or remix it.
+            "request": request.model_dump(mode="json"),
+            "with_video": with_video,
+            "with_cover": with_cover,
         },
     }
     return (video or primary).id

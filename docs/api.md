@@ -70,6 +70,44 @@ Key fields: `kind`, `title`, `content` (lyrics/storyboard JSON), `meta` (bpm, `b
 | GET | `/api/assets/{id}/export?format=txt\|md` | Lyrics as text |
 | POST | `/api/assets/upload` | Multipart: `file`, `kind` (beat\|vocals\|song), `title`, `project_id`, `bpm`. Checked with FFmpeg, stored as MP3 |
 
+## Troll (one button)
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `POST` | `/api/troll` | The whole meme as one job: lyrics (or battle), vocals, beat, mix, fake album cover, optional vertical MP4. Body: `{"request": TrollRequest, "project_id"?, "with_video"?, "with_cover"?}`. Without `project_id` a project named after the target is created. `202` + job. |
+| `POST` | `/api/troll/remix` | Make a finished troll again with `style`, `intensity`, `delivery`, `rapper_name`, `voice` or an `instruction` changed. Reuses the lyrics; a new delivery, intensity or instruction rewrites them first (as a new version). `202` + job. |
+| `GET` | `/api/troll/templates` | The 14 roast templates. |
+| `GET` | `/api/troll/options` | Kinds, styles, intensities, deliveries and templates. |
+| `GET` | `/api/troll/random` | A random situation and settings (no model). |
+| `GET` | `/api/troll/rapper-name?target=` | A ridiculous stage name (word list, no model). |
+
+| `POST` | `/api/troll/factory` | Meme Factory: `{"asset_id", "items": [...], "theme", "award"?, "line"?}`. Items: `vertical_video`, `square_video`, `wide_video`, `square_cover` (reuses the troll's cover), `concert_poster`, `award_card`, `streaming_card`, `reaction_meme`. Themes: `neon`, `gold`, `vaporwave`, `grunge`, `comic`. Designs are drawn by Pillow over one background per run and marked `meta.parody`. `202` + job. |
+
+Remix also takes `regenerate_sections` (section ids) and `section_instruction`: only those sections are rewritten
+(one person's verse in a group roast, the chorus), then the track is re-performed.
+
+### Roast battles
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` | `/api/battles/{asset_id}?voter_id=` | Rappers, battle lyrics, latest scorecard and vote tally. `asset_id` can be the song, video or lyrics. `404 not_a_battle` otherwise. |
+| `POST` | `/api/battles/{asset_id}/score` | The AI judges' opinion: per-rapper marks 1-10 for punchlines, flow, creativity, humor, entertainment, a comment, the winner (or a draw), an announcement and the best line. Stored as a `scorecard` asset with `meta.opinion: true`. `201`. |
+| `GET` | `/api/battles/{asset_id}/votes?voter_id=` | `{"counts", "total", "your_vote"}`. |
+| `POST` | `/api/battles/{asset_id}/votes` | `{"choice": rapper name or "draw", "voter_id"}`. The same voter id changes its vote. No accounts yet, so this prevents accidental double votes only. |
+
+`POST /api/assets/zip` with `{"asset_ids", "name"}` downloads those files as one ZIP.
+
+`TrollRequest`: `situation` (required), `kind` (`diss_track`, `roast`, `rap_battle`, `meme_song`, `group_roast`,
+`funny_beat`, `meme_video`), `style` (`drill`, `trap`, `hip-hop`, `pop`, `country`, `opera`, `techno`, and for beats
+`circus`, `8-bit`), `intensity` (`friendly`, `savage`, `brutal`), `delivery` (`cocky`, `hype`, `narrator`, `deadpan`,
+`news`, `diva`), `target`, `rapper_name`, `template`, `inside_jokes` (up to 5), `people` (group roast: `name`,
+`nickname`, `description`, `voice`), `group_name`, `voice`, `voice_b` (battle), `explicit`, `language`.
+
+The job's `stage` reads `"<step> · <detail>"` where step is one of `Writing the lyrics`, `Recording the vocals`,
+`Building the beat`, `Mixing the track`, `Designing the cover`, `Rendering the video`. The finished song (or beat)
+carries `meta.troll`: kind, artist, target, settings, the full request, and the ids of the lyrics, cover and video,
+plus any warnings (a failed cover does not fail the song).
+
 ## Lyrics and battles
 
 | Method | Path | Body |
@@ -81,6 +119,13 @@ Key fields: `kind`, `title`, `content` (lyrics/storyboard JSON), `meta` (bpm, `b
 | PUT | `/api/lyrics/{id}` | Manual edit → new version |
 | POST | `/api/battles/generate` | `{ project_id, request: { topic, character_a: {name, personality, style}, character_b, rounds, genre, language, troll_intensity, explicit } }` → lyrics whose sections carry `performer` |
 | POST | `/api/battles/characters` | `{ topic }` → `{ characters: [...] }` (direct, not a job) |
+
+Also:
+
+| Method | Path | What it does |
+| --- | --- | --- |
+| `POST` | `/api/lyrics/{id}/punchlines` | Punchline mode: `{"section_id", "line_index", "count": 5, "instruction"?}` returns `{"current", "options", "provider", "model", "is_mock"}`. A direct model call; nothing is saved until you `PUT` the edited lyrics. |
+| `POST` | `/api/lyrics/{id}/restore` | Make that older version the newest again (`origin: "restored"`). Every version is kept. |
 
 ## Beats, vocals, songs
 

@@ -45,6 +45,28 @@ class MockTextProvider(TextGenerationProvider):
                     f"{_TAG} no AI model wrote this line",
                 ]
             }
+        elif task == "punchlines":
+            count = int(_field(prompt, "COUNT") or 5)
+            payload = {"punchlines": [f"{_TAG} alternative punchline {i + 1}, not written by a model" for i in range(count)]}
+        elif task == "score_battle":
+            a, b = _field(prompt, "RAPPER A") or "A", _field(prompt, "RAPPER B") or "B"
+            mark = {"punchlines": 5, "flow": 5, "creativity": 5, "humor": 5, "entertainment": 5}
+            payload = {
+                "scores": {a: {**mark, "humor": 6, "comment": f"{_TAG} placeholder comment"}, b: {**mark, "comment": f"{_TAG} placeholder comment"}},
+                "winner": a,
+                "announcement": f"{_TAG} placeholder announcement: no AI judged this battle.",
+                "best_line": f"{_TAG} placeholder best line",
+            }
+        elif task == "create_rapper":
+            payload = {
+                "name": f"{_TAG} MC Stub", "personality": f"{_TAG} placeholder personality", "bio": f"{_TAG} no AI wrote this biography.",
+                "catchphrase": f"{_TAG} placeholder", "style": "trap", "delivery": "cocky",
+                "stats": {"punchline": 50, "flow": 50, "comedy": 50, "creativity": 50, "reputation": 50},
+            }
+        elif task == "roast_awards":
+            count = int(_field(prompt, "COUNT") or 3)
+            names = ["Best Punchline", "Funniest Chorus", "Legendary Roast", "Best Flow"][:count]
+            payload = {"awards": [{"award": n, "reason": f"{_TAG} placeholder reason", "line": None} for n in names]}
         elif task == "suggest_characters":
             payload = {
                 "characters": [

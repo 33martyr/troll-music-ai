@@ -72,6 +72,11 @@ export interface AssetMeta {
   original_filename?: string;
   intro_card?: boolean;
   meme_overlay?: boolean;
+  format?: string;
+  theme?: string;
+  parody?: boolean;
+  award?: string;
+  background_provider?: string | null;
   troll?: TrollMeta;
 }
 
@@ -91,6 +96,40 @@ export interface TrollRequest {
   rapper_name?: string | null;
   explicit?: boolean;
   language?: string;
+  template?: string | null;
+  inside_jokes?: string[];
+  people?: Participant[];
+  group_name?: string | null;
+  voice?: string | null;
+  voice_b?: string | null;
+}
+
+export interface Participant {
+  name: string;
+  nickname?: string | null;
+  description?: string | null;
+  voice?: string | null;
+}
+
+export interface RoastTemplate {
+  id: string;
+  name: string;
+  emoji: string;
+  scenario: string;
+  kind: TrollKind;
+  style: string;
+  intensity: Intensity;
+  delivery: string;
+  guidance: string;
+  examples: string[];
+}
+
+export interface PunchlineOptions {
+  current: string | null;
+  options: string[];
+  provider: string;
+  model: string | null;
+  is_mock: boolean;
 }
 
 /** Stored on the song (or beat) a troll job made: where everything else is. */
@@ -105,6 +144,11 @@ export interface TrollMeta {
   cover_asset_id: string | null;
   video_asset_id: string | null;
   warnings: string[];
+  lyrics_reused?: boolean;
+  remix_of?: string | null;
+  request?: TrollRequest;
+  with_video?: boolean;
+  with_cover?: boolean;
 }
 
 export interface TrollOptions {
@@ -333,4 +377,102 @@ export interface BattleRequest {
   language: string;
   troll_intensity: number;
   explicit: boolean;
+}
+
+// --------------------------------- battles --------------------------------- //
+
+export interface BattleScore {
+  punchlines: number;
+  flow: number;
+  creativity: number;
+  humor: number;
+  entertainment: number;
+  comment: string;
+}
+
+/** The AI judges' opinion of a battle. Not a measurement. */
+export interface Scorecard {
+  scores: Record<string, BattleScore>;
+  winner: string | null;
+  announcement: string;
+  best_line: string | null;
+  overall: Record<string, number>;
+}
+
+export interface VoteTally {
+  counts: Record<string, number>;
+  total: number;
+  your_vote: string | null;
+}
+
+export interface BattleInfo {
+  battle_id: string;
+  rappers: [string, string];
+  lyrics: Asset<Lyrics>;
+  scorecard: Asset<Scorecard> | null;
+  votes: VoteTally;
+}
+
+export type FactoryItem =
+  | "vertical_video"
+  | "square_video"
+  | "wide_video"
+  | "square_cover"
+  | "concert_poster"
+  | "award_card"
+  | "streaming_card"
+  | "reaction_meme";
+
+// ------------------------------ Troll Universe ----------------------------- //
+
+export interface RapperStats {
+  punchline: number;
+  flow: number;
+  comedy: number;
+  creativity: number;
+  reputation: number;
+}
+
+/** A fictional rapper. Private to this installation. */
+export interface Rapper {
+  id: string;
+  name: string;
+  personality: string;
+  style: string;
+  delivery: string;
+  catchphrase: string;
+  bio: string;
+  stats: RapperStats;
+  overall: number;
+  voice: string | null;
+  avatar: Asset | null;
+  card: Asset | null;
+  wins: number;
+  losses: number;
+  draws: number;
+  titles: string[];
+  origin: string;
+  provider: string | null;
+  model: string | null;
+  is_mock: boolean;
+}
+
+export interface RivalryHistoryItem {
+  track: Asset;
+  kind: TrollKind;
+  settled: boolean;
+  winner_id: string | null;
+  source: "votes" | "judges" | "manual" | null;
+}
+
+export interface Rivalry {
+  id: string;
+  tagline: string;
+  project_id: string | null;
+  rapper_a: Rapper;
+  rapper_b: Rapper;
+  record: { a: number; b: number; draws: number };
+  champion_id: string | null;
+  champion_wins_needed: number;
+  history: RivalryHistoryItem[];
 }

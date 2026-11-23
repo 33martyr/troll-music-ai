@@ -134,6 +134,13 @@ class RegenerateSectionBody(BaseModel):
     instruction: str | None = Field(default=None, max_length=500)
 
 
+class PunchlinesBody(BaseModel):
+    section_id: str
+    line_index: int = Field(ge=0, le=200)
+    count: int = Field(default=5, ge=2, le=8)
+    instruction: str | None = Field(default=None, max_length=300)
+
+
 class RewriteLyricsBody(BaseModel):
     mode: RewriteMode
     instruction: str | None = Field(default=None, max_length=500)
@@ -234,6 +241,40 @@ class GenerateArtworkBody(BaseModel):
     notes: str | None = Field(default=None, max_length=500)
     # Set to turn the picture into a fake album cover: artist, title and a parody sticker.
     artist: str | None = Field(default=None, max_length=40)
+
+
+class RemixBody(BaseModel):
+    """Redo a finished troll with different settings, reusing what did not change."""
+
+    asset_id: str = Field(description="The troll's song, beat or video.")
+    style: str | None = None
+    intensity: str | None = None
+    delivery: str | None = None
+    rapper_name: str | None = Field(default=None, max_length=40)
+    voice: str | None = Field(default=None, max_length=120)
+    instruction: str | None = Field(default=None, max_length=500, description="Rewrite the lyrics this way first.")
+    regenerate_sections: list[str] = Field(default_factory=list, max_length=12, description="Section ids to rewrite; the rest is kept.")
+    section_instruction: str | None = Field(default=None, max_length=300, description="How to rewrite those sections.")
+    with_video: bool = False
+    with_cover: bool = True
+
+
+class FactoryBody(BaseModel):
+    """Meme Factory: shareable formats from a finished troll."""
+
+    asset_id: str = Field(description="The troll's song (or beat).")
+    items: list[Literal[
+        "vertical_video", "square_video", "wide_video", "square_cover",
+        "concert_poster", "award_card", "streaming_card", "reaction_meme",
+    ]] = Field(min_length=1, max_length=8)
+    theme: Literal["neon", "gold", "vaporwave", "grunge", "comic"] = "neon"
+    award: str | None = Field(default=None, max_length=60)
+    line: str | None = Field(default=None, max_length=200, description="The lyric to feature; the chorus by default.")
+
+
+class ZipBody(BaseModel):
+    asset_ids: list[str] = Field(min_length=1, max_length=50)
+    name: str = Field(default="troll-music-ai", max_length=80)
 
 
 class TrollBody(BaseModel):

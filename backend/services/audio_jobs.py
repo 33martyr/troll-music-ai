@@ -120,10 +120,15 @@ def _make_vocals(context: JobContext, lyrics_asset: Asset, bpm: float, span: tup
     character_b = ((lyrics_asset.params or {}).get("character_b") or {}).get("name")
     second = character_b if character_b in performers else (performers[1] if len(performers) > 1 else None)
     voice_b = params.get("voice_b")
-    lines = [
-        SpeechLine(text=text, voice=voice_b if voice_b and second and performer == second else voice, sample_path=sample)
-        for _, _, performer, text in rows
-    ]
+    # Group chat roasts: each person's section in their own voice, where given.
+    by_section = {k: v for k, v in (params.get("section_voices") or {}).items() if v} if not sample else {}
+
+    def voice_for(label: str, performer: str | None) -> str | None:
+        if label in by_section:
+            return by_section[label]
+        return voice_b if voice_b and second and performer == second else voice
+
+    lines = [SpeechLine(text=text, voice=voice_for(label, performer), sample_path=sample) for _, label, performer, text in rows]
 
     start, end = span
     context.progress(start, f"Performing {len(lines)} lines with {info.name}")

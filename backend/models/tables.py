@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.core.db import Base
@@ -40,7 +40,8 @@ class AssetKind:
     VIDEO = "video"
     ARTWORK = "artwork"
     STORYBOARD = "storyboard"
-    ALL = (LYRICS, BEAT, VOCALS, SONG, VIDEO, ARTWORK, STORYBOARD)
+    SCORECARD = "scorecard"  # the AI judges' opinion of a rap battle
+    ALL = (LYRICS, BEAT, VOCALS, SONG, VIDEO, ARTWORK, STORYBOARD, SCORECARD)
 
 
 class JobStatus:
@@ -182,3 +183,72 @@ class ProviderSetting(Base):
     api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class BattleVote(Base):
+    """One vote on a rap battle. ``voter_id`` is a random id the voter's browser
+    keeps, so a person changes their vote instead of adding another. There are
+    no accounts yet, so this stops accidental double votes, not determined ones."""
+
+    __tablename__ = "battle_votes"
+    __table_args__ = (UniqueConstraint("battle_id", "voter_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    battle_id: Mapped[str] = mapped_column(String(32), index=True)  # root id of the battle lyrics
+    voter_id: Mapped[str] = mapped_column(String(64))
+    choice: Mapped[str] = mapped_column(String(60))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class Rapper(Base):
+    """A fictional rapper in the user's Troll Universe. Private: there is no
+    public profile. ``origin`` says who wrote it: ``ai``, ``builtin`` (word
+    lists, not AI) or ``manual``."""
+
+    __tablename__ = "rappers"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(40))
+    personality: Mapped[str] = mapped_column(Text, default="")
+    style: Mapped[str] = mapped_column(String(20), default="trap")
+    delivery: Mapped[str] = mapped_column(String(20), default="cocky")
+    catchphrase: Mapped[str] = mapped_column(String(120), default="")
+    bio: Mapped[str] = mapped_column(Text, default="")
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    voice: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    avatar_asset_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    card_asset_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    losses: Mapped[int] = mapped_column(Integer, default=0)
+    draws: Mapped[int] = mapped_column(Integer, default=0)
+    titles: Mapped[list] = mapped_column(JSON, default=list)
+    origin: Mapped[str] = mapped_column(String(20), default="manual")
+    provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_mock: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class Rivalry(Base):
+    __tablename__ = "rivalries"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    rapper_a_id: Mapped[str] = mapped_column(ForeignKey("rappers.id", ondelete="CASCADE"), index=True)
+    rapper_b_id: Mapped[str] = mapped_column(ForeignKey("rappers.id", ondelete="CASCADE"), index=True)
+    tagline: Mapped[str] = mapped_column(String(300), default="")
+    project_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # where its tracks are saved
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RivalryResult(Base):
+    """Who won one battle of a rivalry, and how that was decided."""
+
+    __tablename__ = "rivalry_results"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    rivalry_id: Mapped[str] = mapped_column(ForeignKey("rivalries.id", ondelete="CASCADE"), index=True)
+    song_asset_id: Mapped[str] = mapped_column(String(32), unique=True)
+    winner_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # None: a draw
+    source: Mapped[str] = mapped_column(String(20))  # votes, judges or manual
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -156,6 +156,11 @@ def _id(value: "Asset | VoiceProfile | Project | JobInfo | str | None") -> str |
     return value if value is None or isinstance(value, str) else value.id
 
 
+def _rid(value: "dict | str | None") -> str | None:
+    """Id of a Troll Universe record (returned as plain dicts)."""
+    return value if value is None or isinstance(value, str) else value["id"]
+
+
 ProgressCallback = Callable[[JobInfo], None]
 
 
@@ -416,6 +421,132 @@ class AsyncTrollMusicClient:
         request = {"situation": situation, "kind": kind, "style": style, "intensity": intensity, **options}
         body = {"project_id": _id(project), "request": request, "with_video": with_video, "with_cover": with_cover}
         return await self._generate("/api/troll", body, wait=wait, timeout=timeout, on_progress=on_progress)
+
+    async def remix(
+        self, asset: Asset | str, *, wait: bool = True, timeout: float = 3600.0,
+        on_progress: ProgressCallback | None = None, **changes: Any,
+    ) -> "Asset | JobInfo":
+        """Make a troll again with some settings changed, reusing its lyrics.
+        ``changes``: style, intensity, delivery, rapper_name, voice, instruction
+        (rewrite the lyrics this way first), with_video, with_cover."""
+        body = {"asset_id": _id(asset), **changes}
+        return await self._generate("/api/troll/remix", body, wait=wait, timeout=timeout, on_progress=on_progress)
+
+    async def battle(self, asset: Asset | str, *, voter_id: str | None = None) -> dict:
+        """A rap battle's rappers, lyrics, latest scorecard and vote tally."""
+        params = {"voter_id": voter_id} if voter_id else None
+        return await self._json("GET", f"/api/battles/{_id(asset)}", params=params)
+
+    async def score_battle(self, asset: Asset | str) -> Asset:
+        """Ask the AI judges. The scorecard is an opinion, stored as a ``scorecard`` asset."""
+        return Asset.model_validate(await self._json("POST", f"/api/battles/{_id(asset)}/score"))
+
+    async def vote(self, asset: Asset | str, choice: str, voter_id: str) -> dict:
+        """Vote for a rapper by name (or ``"draw"``). The same ``voter_id`` changes its vote."""
+        return await self._json("POST", f"/api/battles/{_id(asset)}/votes", json={"choice": choice, "voter_id": voter_id})
+
+    async def meme_factory(
+        self, asset: Asset | str, items: list[str], *, theme: str = "neon", award: str | None = None,
+        line: str | None = None, wait: bool = True, timeout: float = 3600.0, on_progress: ProgressCallback | None = None,
+    ) -> "Asset | JobInfo":
+        """Shareable formats from a troll. ``items``: vertical_video, square_video, wide_video,
+        square_cover, concert_poster, award_card, streaming_card, reaction_meme. Returns the first;
+        ``asset.job.result_asset_ids`` lists every one."""
+        body = {"asset_id": _id(asset), "items": items, "theme": theme, "award": award, "line": line}
+        return await self._generate("/api/troll/factory", body, wait=wait, timeout=timeout, on_progress=on_progress)
+
+    async def download_zip(self, assets: list[Asset | str], path: str | Path, *, name: str = "troll-music-ai") -> Path:
+        """Save several assets' files as one ZIP."""
+        response = await self._request("POST", "/api/assets/zip", json={"asset_ids": [_id(a) for a in assets], "name": name})
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(response.content)
+        return target
+
+    # ----------------------------- Troll Universe -------------------------- #
+
+    async def rappers(self) -> list[dict]:
+        """Your fictional rappers (private to this installation)."""
+        return await self._json("GET", "/api/universe/rappers")
+
+    async def generate_rapper(self, idea: str | None = None) -> dict:
+        """Invent a rapper with the text model (``origin: "ai"``), or from word lists without one (``"builtin"``)."""
+        return await self._json("POST", "/api/universe/rappers/generate", json={"idea": idea})
+
+    async def create_rapper(self, name: str, **profile: Any) -> dict:
+        """A rapper you write yourself. ``profile``: personality, style, delivery, catchphrase, bio, stats, voice."""
+        return await self._json("POST", "/api/universe/rappers", json={"name": name, **profile})
+
+    async def update_rapper(self, rapper: dict | str, **changes: Any) -> dict:
+        return await self._json("PATCH", f"/api/universe/rappers/{_rid(rapper)}", json=changes)
+
+    async def delete_rapper(self, rapper: dict | str) -> None:
+        await self._request("DELETE", f"/api/universe/rappers/{_rid(rapper)}")
+
+    async def paint_rapper(self, rapper: dict | str, *, wait: bool = True, timeout: float = 600.0) -> "Asset | JobInfo":
+        """A portrait from the image provider, then a fresh collectible card (returned)."""
+        return await self._generate(f"/api/universe/rappers/{_rid(rapper)}/portrait", {}, wait=wait, timeout=timeout, on_progress=None)
+
+    async def create_rivalry(self, rapper_a: dict | str, rapper_b: dict | str, tagline: str = "") -> dict:
+        body = {"rapper_a_id": _rid(rapper_a), "rapper_b_id": _rid(rapper_b), "tagline": tagline}
+        return await self._json("POST", "/api/universe/rivalries", json=body)
+
+    async def rivalry(self, rivalry: dict | str) -> dict:
+        """Both rappers, the head-to-head record, the champion and the battle history."""
+        return await self._json("GET", f"/api/universe/rivalries/{_rid(rivalry)}")
+
+    async def rivalry_track(
+        self, rivalry: dict | str, kind: str = "battle", *, from_rapper: dict | str | None = None,
+        wait: bool = True, timeout: float = 3600.0, on_progress: ProgressCallback | None = None, **options: Any,
+    ) -> "Asset | JobInfo":
+        """A battle between the two rappers, or (``kind="diss"``) a diss track from ``from_rapper``.
+        ``options``: situation, style, intensity, with_video."""
+        body = {"kind": kind, "from_id": _rid(from_rapper) if from_rapper else None, **options}
+        return await self._generate(f"/api/universe/rivalries/{_rid(rivalry)}/tracks", body, wait=wait, timeout=timeout, on_progress=on_progress)
+
+    async def settle_battle(self, rivalry: dict | str, battle: Asset | str, winner: dict | str | None = None) -> dict:
+        """Record who won: ``winner`` (a rapper or ``"draw"``), else the votes, else the AI judges."""
+        win = winner if winner in (None, "draw") else _rid(winner)
+        body = {"song_asset_id": _id(battle), "winner": win}
+        return await self._json("POST", f"/api/universe/rivalries/{_rid(rivalry)}/settle", json=body)
+
+    async def rivalry_poster(self, rivalry: dict | str) -> Asset:
+        return Asset.model_validate(await self._json("POST", f"/api/universe/rivalries/{_rid(rivalry)}/poster"))
+
+    async def roast_awards(
+        self, track: Asset | str, *, count: int = 3, theme: str = "gold", wait: bool = True, timeout: float = 600.0,
+    ) -> "Asset | JobInfo":
+        """Roast Awards: the text model picks awards (an opinion); each becomes an award card."""
+        return await self._generate(f"/api/awards/{_id(track)}", {"count": count, "theme": theme}, wait=wait, timeout=timeout, on_progress=None)
+
+    async def awards(self, track: Asset | str) -> list[Asset]:
+        return [Asset.model_validate(a) for a in await self._json("GET", f"/api/awards/{_id(track)}")]
+
+    async def templates(self) -> list[dict]:
+        """Roast templates (friend archetypes) to start from."""
+        return await self._json("GET", "/api/troll/templates")
+
+    async def punchlines(
+        self, lyrics: Asset | str, section_id: str, line_index: int, *, count: int = 5, instruction: str | None = None,
+    ) -> dict:
+        """PUNCHLINE MODE: ``count`` alternatives for one line. Nothing is saved;
+        apply one with :meth:`save_lyrics`. Returns ``{"current", "options", "provider", "model", "is_mock"}``."""
+        body = {"section_id": section_id, "line_index": line_index, "count": count, "instruction": instruction}
+        return await self._json("POST", f"/api/lyrics/{_id(lyrics)}/punchlines", json=body)
+
+    async def save_lyrics(self, lyrics: Asset | str, edited: Lyrics | dict) -> Asset:
+        """Save edited lyrics as a new version (no model involved)."""
+        data = edited.model_dump(mode="json") if isinstance(edited, Lyrics) else edited
+        body = {"title": data["title"], "sections": data["sections"]}
+        return Asset.model_validate(await self._json("PUT", f"/api/lyrics/{_id(lyrics)}", json=body))
+
+    async def asset_history(self, asset: Asset | str) -> list[Asset]:
+        """Every version of an asset, newest first."""
+        return [Asset.model_validate(item) for item in await self._json("GET", f"/api/assets/{_id(asset)}/history")]
+
+    async def restore_lyrics_version(self, version: Asset | str) -> Asset:
+        """Make an older lyrics version the newest one again (all versions are kept)."""
+        return Asset.model_validate(await self._json("POST", f"/api/lyrics/{_id(version)}/restore"))
 
     async def random_troll(self) -> dict:
         """A random situation and settings, ready to pass to :meth:`troll`."""

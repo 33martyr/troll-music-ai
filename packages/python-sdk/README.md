@@ -122,6 +122,41 @@ Every generation method takes `wait=False` (return the job) and `on_progress=cal
 `AsyncTrollMusicClient` has the same methods as coroutines. `TROLL_API_URL` and `TROLL_API_KEY` are read
 from the environment when not passed.
 
+## One-button trolls
+
+```python
+from troll_music_ai import TrollMusicClient
+
+with TrollMusicClient(base_url="http://localhost:8000") as client:
+    song = client.troll("Dave acts rich but borrows money every Friday", kind="diss_track",
+                        style="trap", intensity="savage", target="Dave", template="broke")
+    client.download(song, "dave.mp3")
+    print(song.meta["troll"]["artist"], song.meta["troll"]["lyrics_asset_id"])
+
+    opera = client.remix(song, style="opera")             # same lyrics, new beat and cover
+    lyrics = client.get_asset(song.meta["troll"]["lyrics_asset_id"])
+    ideas = client.punchlines(lyrics, lyrics.lyrics.sections[1].id, 0)   # five alternatives
+    print(ideas["options"])
+```
+
+Battles, the Meme Factory and group roasts:
+
+```python
+battle = client.troll("Marcus only knows one song on guitar", kind="rap_battle", target="Marcus")
+card = client.score_battle(battle)          # AI judges' opinion, stored as a scorecard asset
+client.vote(battle, "Marcus", voter_id="my-browser-id")
+
+pack = client.meme_factory(battle, ["vertical_video", "concert_poster", "award_card"], theme="gold")
+client.download_zip(pack.job.result_asset_ids, "marcus-pack.zip")
+
+group = client.troll("We never book the trip", kind="group_roast",
+                     people=[{"name": "Dave", "description": "never pays"}, {"name": "Sam"}])
+sam = next(s for s in client.get_asset(group.meta["troll"]["lyrics_asset_id"]).lyrics.sections if s.label == "Sam")
+client.remix(group, regenerate_sections=[sam.id])   # only Sam's verse is rewritten
+```
+
+Also: `random_troll()`, `templates()`, `battle()`, `save_lyrics()`, `asset_history()`, `restore_lyrics_version()`.
+
 ## Your own provider
 
 ```python

@@ -307,7 +307,12 @@ def generate_artwork(context: JobContext) -> str:
         if part
     )
     context.progress(0.1, f"Creating the cover with {info.name}")
-    request = ImageRequest(prompt=prompt, width=1024, height=1024, seed=secrets.randbelow(2**31), title=title, subtitle=genre)
+    # With the meme overlay the title is drawn on top, so the built-in card is left without text.
+    overlay = bool(params.get("artist"))
+    request = ImageRequest(
+        prompt=prompt, width=1024, height=1024, seed=secrets.randbelow(2**31),
+        title=" " if overlay else title, subtitle=None if overlay else genre,
+    )
     raw = asyncio.run(provider.generate_image(request, context.workdir / "cover_raw.png"))
     context.progress(0.85, "Finishing")
     try:

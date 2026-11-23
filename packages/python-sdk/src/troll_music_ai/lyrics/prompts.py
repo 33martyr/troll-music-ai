@@ -238,7 +238,8 @@ def battle_structure(request: BattleRequest) -> list[tuple[str, str | None]]:
     a, b = request.character_a.name, request.character_b.name
     plan: list[tuple[str, str | None]] = [("Intro", None)]
     for number in range(1, request.rounds + 1):
-        plan += [(f"{a}: Round {number}", a), (f"{b}: Round {number}", b)]
+        name = "Knockout" if request.knockout and number == request.rounds and request.rounds > 1 else f"Round {number}"
+        plan += [(f"{a}: {name}", a), (f"{b}: {name}", b)]
         if number == 1 or number == request.rounds:
             plan.append(("Chorus", None))
     plan.append(("Outro", None))
@@ -263,7 +264,9 @@ STRUCTURE: {", ".join(label for label, _ in plan)}
 Write a humorous rap battle between the two characters. {_FICTION_RULE}
 Each round verse is 8 lines in that character's distinct voice, and each rapper answers the \
 other's previous verse directly. The Chorus is a call-and-response between both of them and \
-repeats identically. The Intro and Outro belong to a battle host. Output one section per entry \
+repeats identically. The Intro and Outro belong to a battle host: the Intro is a dramatic, \
+over-the-top boxing-style introduction of both rappers. {"Knockout verses are each rapper's final and \
+hardest verse, ending on the biggest punchline of the battle. " if request.knockout else ""}Output one section per entry \
 in STRUCTURE, in that order, using those exact labels. Round verses have type "verse" and a \
 "performer" equal to the character's name. Also suggest a BPM, a genre and beat notes.
 
@@ -333,10 +336,21 @@ def _troll_shape(request) -> str:
 
 
 def troll_messages(request) -> list[ChatMessage]:
+    from ..templates import get as get_template
     from ..troll import DELIVERIES
 
     target = request.who
     names = f"PEOPLE IN THE CHAT: {', '.join(request.names)}\n" if request.names else ""
+    for person in getattr(request, "people", None) or []:
+        detail = f" ({person.nickname})" if person.nickname else ""
+        names += f"- {person.name}{detail}" + (f": {person.description}\n" if person.description else " (roast their part in the SITUATION)\n")
+    template = get_template(request.template)
+    if template:
+        names += f"ARCHETYPE: {template.name}. {template.guidance}\n"
+    if request.inside_jokes:
+        names += "INSIDE JOKES (work each one in as a callback): " + " | ".join(request.inside_jokes) + "\n"
+    if getattr(request, "group_name", None):
+        names += f"GROUP CHAT NAME: {request.group_name}\n"
     performer = request.rapper_name or "the roaster"
     rating = "explicit language allowed (no slurs)" if request.explicit else "clean, no profanity"
     user = f"""\
@@ -361,6 +375,60 @@ Also suggest a BPM, a genre and 3 short beat notes.
 
 Return JSON in this shape:
 {SONG_SCHEMA}"""
+    return _messages(user)
+
+
+def punchline_messages(
+    lyrics: Lyrics, section: LyricSection, line_index: int, count: int, request: LyricsRequest | None, instruction: str | None
+) -> list[ChatMessage]:
+    line = section.lines[line_index]
+    before = section.lines[line_index - 1] if line_index > 0 else None
+    after = section.lines[line_index + 1] if line_index + 1 < len(section.lines) else None
+    style = f"{_style_block(request)}\nTOPIC: {request.prompt}\n" if request else ""
+    extra = f"INSTRUCTION: {instruction.strip()}\n" if instruction and instruction.strip() else ""
+    context = "\n".join(
+        part for part in (f"LINE BEFORE: {before}" if before else "", f"LINE TO REPLACE: {line}", f"LINE AFTER: {after}" if after else "") if part
+    )
+    user = f"""\
+TASK: punchlines
+SECTION: {section.label}
+COUNT: {count}
+{style}{extra}{context}
+
+Song so far:
+<song>
+{_song_json(lyrics)}
+</song>
+
+Write {count} alternative versions of LINE TO REPLACE. Each one must fit the same spot: about the same length and syllable count, keep the rhyme with the neighbouring lines, and land a harder, funnier punchline. Make the {count} options genuinely different from each other (different angle, image or wordplay), and different from the current line.
+
+Return JSON in this shape:
+{{"punchlines": ["option one", "option two"]}}"""
+    return _messages(user)
+
+
+def score_messages(lyrics: Lyrics, a: str, b: str) -> list[ChatMessage]:
+    user = f"""\
+TASK: score_battle
+RAPPER A: {a}
+RAPPER B: {b}
+
+Here is the battle:
+<song>
+{_song_json(lyrics)}
+</song>
+
+You are a panel of three comedy rap-battle judges. Judge only the verses each rapper performed (sections \
+with their "performer"). Give each rapper a mark from 1 to 10 for punchlines, flow, creativity, humor and \
+entertainment, and a one-sentence comment quoting or pointing at their actual lines. Then name the winner \
+(or "draw"), write a short, funny winner announcement (2 to 3 sentences) that explains the decision using \
+specific lines, and pick the single best line of the battle. This is your opinion: be fair, be specific, \
+and be entertaining.
+
+Return JSON in this shape:
+{{"scores": {{"{a}": {{"punchlines": 7, "flow": 6, "creativity": 8, "humor": 9, "entertainment": 8, "comment": "..."}}, \
+"{b}": {{"punchlines": 6, "flow": 7, "creativity": 6, "humor": 7, "entertainment": 7, "comment": "..."}}}}, \
+"winner": "{a}", "announcement": "...", "best_line": "..."}}"""
     return _messages(user)
 
 

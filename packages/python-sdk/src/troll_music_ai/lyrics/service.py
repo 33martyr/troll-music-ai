@@ -7,9 +7,9 @@ from collections.abc import Callable
 from ..errors import LyricsParseError
 from ..providers.base import ChatMessage, TextGenerationProvider, TextRequest
 from ..troll import TrollKind, TrollRequest
-from ..types import BattleCharacter, BattleRequest, GenerationMeta, Lyrics, LyricsRequest, LyricStyle, RewriteMode, SectionType
+from ..types import BattleCharacter, BattleRequest, GenerationMeta, Lyrics, LyricsRequest, LyricStyle, RewriteMode, Scorecard, SectionType
 from . import prompts
-from .parser import parse_characters, parse_lyrics, parse_section_lines
+from .parser import parse_characters, parse_lyrics, parse_punchlines, parse_scorecard, parse_section_lines
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -49,6 +49,12 @@ def battle_request_for(request: TrollRequest) -> BattleRequest:
     from the situation given, as the fiction rule in the prompt requires."""
     from ..troll import rapper_name
 
+    if len(request.characters) == 2:  # two fictional rappers from the Troll Universe
+        first, second = (BattleCharacter.model_validate(c) for c in request.characters)
+        return BattleRequest(
+            topic=request.situation, character_a=first, character_b=second, rounds=2, knockout=True,
+            genre=request.genre[:60], language=request.language, troll_intensity=request.level, explicit=request.explicit,
+        )
     challenger = request.rapper_name or rapper_name()
     who = request.who
     return BattleRequest(
@@ -56,6 +62,7 @@ def battle_request_for(request: TrollRequest) -> BattleRequest:
         character_a=BattleCharacter(name=challenger[:60], personality="the friend who finally says what everyone is thinking", style="cocky, punchline-heavy"),
         character_b=BattleCharacter(name=who[:60], personality=f"defends themself badly. Known for: {request.situation}"[:300], style="flustered comebacks that backfire"),
         rounds=2,
+        knockout=True,
         genre=request.genre[:60],
         language=request.language,
         troll_intensity=request.level,
@@ -173,6 +180,7 @@ class LyricsService:
         for old, new in zip(lyrics.sections, rewritten.sections):
             if old.type is new.type:
                 new.id = old.id
+                new.performer = old.performer  # a battle keeps who raps what
         rewritten.meta = self._meta(model)
         return rewritten
 
@@ -223,6 +231,51 @@ class LyricsService:
                 section.performer = None
         lyrics.meta = self._meta(model)
         return lyrics
+
+    async def punchlines(
+        self,
+        lyrics: Lyrics,
+        section_id: str,
+        line_index: int,
+        *,
+        count: int = 5,
+        request: LyricsRequest | None = None,
+        instruction: str | None = None,
+    ) -> tuple[list[str], str | None]:
+        """PUNCHLINE MODE: ``count`` alternatives for one line. Nothing is saved;
+        the caller applies the chosen one as a new version."""
+        section = lyrics.section(section_id)
+        if section is None:
+            raise ValueError(f"No section with id '{section_id}'.")
+        if not 0 <= line_index < len(section.lines):
+            raise ValueError(f"Section '{section.label}' has no line {line_index + 1}.")
+        current = section.lines[line_index]
+        options, model = await self._ask(
+            prompts.punchline_messages(lyrics, section, line_index, count, request, instruction),
+            lambda text: parse_punchlines(text, current),
+            _noop,
+        )
+        return options[:count], model
+
+    async def score_battle(self, lyrics: Lyrics, a: str, b: str) -> Scorecard:
+        """The AI judges' opinion of a battle: marks, a winner and why."""
+        card, model = await self._ask(prompts.score_messages(lyrics, a, b), lambda text: parse_scorecard(text, a, b), _noop)
+        card.meta = self._meta(model)
+        return card
+
+    async def create_rapper(self, idea: str | None = None):
+        """A fictional rapper profile invented by the model (Troll Universe)."""
+        from ..universe import parse_profile, profile_messages
+
+        profile, _ = await self._ask(profile_messages(idea), parse_profile, _noop)
+        return profile
+
+    async def roast_awards(self, lyrics: Lyrics, count: int = 3):
+        """Awards from the fixed Roast Awards list, with reasons quoting the lyrics."""
+        from ..universe import awards_messages, parse_awards
+
+        awards, model = await self._ask(awards_messages(prompts._song_json(lyrics), count), lambda t: parse_awards(t, count), _noop)
+        return awards, model
 
     async def suggest_characters(self, topic: str) -> list[dict]:
         characters, _ = await self._ask(prompts.characters_messages(topic), parse_characters, _noop)

@@ -2,15 +2,33 @@
 
 **Roast it. Rap it. Release it.**
 
-Turn any idea, joke, roast or situation into lyrics, beats, songs, music videos and cover art.
+Turn your friends' funniest moments into diss tracks, roasts, rap battles, meme songs and meme videos, then send
+them to the group chat.
 
-TROLL-MUSIC-AI is an open-source, modular creative studio:
+Open the app, type what your friend did, pick a type, a style and how hard to go, and press **Generate**. You get
+a mixed track, a fake album cover and, for meme videos, a vertical MP4, with synced lyrics you can share,
+download, remix or edit line by line.
 
-- a **Python toolkit** (`troll_music_ai`) with a provider registry, the lyrics engine and a REST client,
-- a **FastAPI backend** that runs generation as background jobs and processes media with FFmpeg,
-- a **Next.js studio** with a page per module and a Model Settings page.
+- **One button, seven formats:** Diss Track, Savage Roast, Rap Battle, Meme Song, Group Chat Roast, Funny Beat,
+  Meme Video.
+- **Roast templates:** 14 friend archetypes (The Broke Friend, The Group Chat Ghost, ...) that pre-fill the form.
+- **Remix:** change the style, heat, delivery, rapper name or voice and make it again, reusing the lyrics.
+- **Punchline mode:** pick any line in the Lyrics Editor and get five sharper alternatives. Every edit is a new
+  version you can restore.
+- **Group Chat Roast ("Everyone gets cooked"):** 2 to 8 people with nicknames, their "crimes" and a voice each;
+  one verse per person and a group anthem. Re-cook one person's verse without touching the rest.
+- **Roast Battles:** you vs them with two voices, a dramatic intro and a Knockout round; an AI judges'
+  scorecard (punchlines, flow, creativity, humor, entertainment) shown as an opinion, and friend voting.
+- **Meme Factory:** 9:16 / 1:1 / 16:9 videos (Stories, TikTok, Shorts), the cover, a fake concert poster, a fake
+  award from "The Trollies", a parody "now playing" card and a reaction meme, in 5 themes, downloadable as a ZIP.
+- **Workshop:** the individual tools (lyrics, beats, songs, voices, videos, covers, battles) for hand-tuning.
 
-Every generator stands on its own. If you only want a beat, you only make a beat.
+Under the hood: a **Python toolkit** (`troll_music_ai`) with a provider registry, the lyrics engine and a REST
+client; a **FastAPI backend** that runs generation as background jobs and processes media with FFmpeg; and a
+**Next.js app**.
+
+The jokes target what people *do*, never who they *are*: the prompts forbid jokes about looks, health, race,
+religion, gender, sexuality or disability, and private details. See [docs/safety.md](docs/safety.md).
 
 ## What works, honestly
 

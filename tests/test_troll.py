@@ -169,3 +169,85 @@ def test_form_helpers(studio):  # noqa: F811
     assert TrollRequest.model_validate(client.get("/api/troll/random").json())
     assert client.get("/api/troll/rapper-name?target=Dave").json()["name"]
     assert client.post("/api/troll", json={"request": {"situation": DAVE, "style": "polka"}}).status_code == 422
+
+
+# ------------------------------- phase 1 ----------------------------------- #
+
+
+def test_templates_fill_the_form_and_steer_the_prompt(studio):  # noqa: F811
+    from troll_music_ai.templates import TEMPLATES, filled
+
+    assert len(TEMPLATES) == 14 and len({t.id for t in TEMPLATES}) == 14
+    for template in TEMPLATES:  # every template is a valid request once filled in
+        TrollRequest.model_validate(filled(template, "Dave"))
+    late = filled(next(t for t in TEMPLATES if t.id == "late"), "Dave")
+    prompt = troll_messages(TrollRequest.model_validate(late | {"inside_jokes": ["the kebab incident"]}))[-1].content
+    assert "ARCHETYPE: The Always Late Friend" in prompt and "the kebab incident" in prompt
+    client = studio()
+    listed = client.get("/api/troll/templates").json()
+    assert [t["id"] for t in listed] == [t.id for t in TEMPLATES]
+    assert client.post("/api/troll", json={"request": {"situation": DAVE, "template": "nope"}}).status_code == 422
+
+
+def test_punchline_mode_offers_alternatives_and_saving_one_is_a_new_version(studio):  # noqa: F811
+    client = studio()
+    made = outputs(client, troll(client))
+    lyrics = made["lyrics"]
+    section = lyrics["content"]["sections"][1]
+    original_line = section["lines"][0]
+    reply = client.post(f"/api/lyrics/{lyrics['id']}/punchlines", json={"section_id": section["id"], "line_index": 0}).json()
+    assert len(reply["options"]) == 5 and reply["is_mock"] is True and reply["current"] == section["lines"][0]
+    assert client.post(f"/api/lyrics/{lyrics['id']}/punchlines", json={"section_id": section["id"], "line_index": 99}).status_code == 404
+
+    sections = lyrics["content"]["sections"]
+    sections[1]["lines"][0] = reply["options"][2]
+    saved = client.put(f"/api/lyrics/{lyrics['id']}", json={"title": lyrics["title"], "sections": sections}).json()
+    assert saved["version"] == 2 and saved["content"]["sections"][1]["lines"][0] == reply["options"][2]
+    restored = client.post(f"/api/lyrics/{lyrics['id']}/restore").json()
+    assert restored["version"] == 3 and restored["origin"] == "restored"
+    assert restored["content"]["sections"][1]["lines"][0] == original_line
+    assert [v["version"] for v in client.get(f"/api/assets/{lyrics['id']}/history").json()] == [3, 2, 1]
+
+
+def test_remix_reuses_the_lyrics_and_changes_only_what_was_asked(studio):  # noqa: F811
+    client = studio()
+    first = troll(client, style="trap", rapper_name="Lil Overdraft")
+    song = client.get(f"/api/assets/{first['result_asset_id']}").json()
+    lyrics_id = song["meta"]["troll"]["lyrics_asset_id"]
+
+    remix = done(client, client.post("/api/troll/remix", json={"asset_id": song["id"], "style": "opera", "rapper_name": "Sir Buffering"}))
+    made = outputs(client, remix)
+    assert "lyrics" not in made  # no new words: the original lyrics were reused
+    meta = made["song"]["meta"]["troll"]
+    assert meta["lyrics_asset_id"] == lyrics_id and meta["lyrics_reused"] and meta["remix_of"] == song["id"]
+    assert made["beat"]["meta"]["genre"] == "opera" and meta["artist"] == "Sir Buffering"
+    assert remix["project_id"] == first["project_id"]
+
+    rewritten = outputs(client, done(client, client.post("/api/troll/remix", json={"asset_id": song["id"], "delivery": "news"})))
+    assert rewritten["lyrics"]["origin"] == "rewritten" and rewritten["lyrics"]["version"] == 2
+    assert rewritten["song"]["meta"]["troll"]["artist"] == "Lil Overdraft"  # the stage name survives a remix
+
+    beat = client.get(f"/api/assets/{troll(client, kind='funny_beat')['result_asset_id']}").json()
+    random_name = beat["meta"]["troll"]["artist"]
+    again = outputs(client, done(client, client.post("/api/troll/remix", json={"asset_id": beat["id"], "style": "8-bit"})))
+    assert again["beat"]["meta"]["troll"]["artist"] == random_name and again["beat"]["meta"]["genre"] == "chiptune"
+
+    imported = client.post("/api/lyrics/import", json={"title": "Mine", "text": "line one\nline two"}).json()
+    refused = client.post("/api/troll/remix", json={"asset_id": imported["id"], "style": "pop"})
+    assert refused.status_code == 422 and refused.json()["error"]["code"] == "not_a_troll"
+
+
+def test_group_chat_roast_gives_each_person_their_section_and_voice(studio):  # noqa: F811
+    voice = FakeVoice()
+    client = studio(voice=voice)
+    job = troll(
+        client, kind="group_roast", group_name="Lads Holiday", inside_jokes=["the kebab incident"],
+        people=[{"name": "Dave", "nickname": "Big D", "voice": "Ada"}, {"name": "Sam", "voice": "Bob"}],
+    )
+    lyrics = outputs(client, job)["lyrics"]["content"]
+    assert [s["label"] for s in lyrics["sections"]] == ["Intro", "Dave", "Sam", "Chorus", "Outro"]
+    timings = outputs(client, job)["song"]["meta"]["line_timings"]
+    by_label = {}
+    for line, spoken in zip(timings, voice.spoken):
+        by_label.setdefault(line["label"], set()).add(spoken.voice)
+    assert by_label["Dave"] == {"Ada"} and by_label["Sam"] == {"Bob"} and by_label["Intro"] == {None}

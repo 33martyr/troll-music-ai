@@ -14,6 +14,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, field_validator
 
+from .templates import TEMPLATES
+
 
 class TrollKind(StrEnum):
     DISS_TRACK = "diss_track"
@@ -69,6 +71,15 @@ DELIVERIES: dict[str, tuple[str, str]] = {
 }
 
 
+class Participant(BaseModel):
+    """Someone in a group chat roast. Only what the user typed is used."""
+
+    name: str = Field(min_length=1, max_length=40)
+    nickname: str | None = Field(default=None, max_length=40)
+    description: str | None = Field(default=None, max_length=200)
+    voice: str | None = Field(default=None, max_length=120, description="Stock voice for their verse, where supported.")
+
+
 class TrollRequest(BaseModel):
     """What the home screen asks: who, what happened, and how hard."""
 
@@ -82,6 +93,31 @@ class TrollRequest(BaseModel):
     rapper_name: str | None = Field(default=None, max_length=40, description="The roaster's stage name.")
     explicit: bool = False
     language: str = Field(default="English", max_length=40)
+    template: str | None = Field(default=None, max_length=40, description="A roast template id (see templates.py).")
+    inside_jokes: list[str] = Field(default_factory=list, max_length=5, description="Inside jokes to work in.")
+    people: list[Participant] = Field(default_factory=list, max_length=8, description="Group chat roast participants.")
+    voice: str | None = Field(default=None, max_length=120, description="Stock voice for the main performer.")
+    voice_b: str | None = Field(default=None, max_length=120, description="Rap battle: the friend's voice.")
+    characters: list[dict] = Field(
+        default_factory=list, max_length=2,
+        description="Rap battle between two Troll Universe rappers: [{name, personality, style}, {...}].",
+    )
+    group_name: str | None = Field(default=None, max_length=60)
+
+    @field_validator("inside_jokes")
+    @classmethod
+    def _jokes(cls, value: list[str]) -> list[str]:
+        return [" ".join(joke.split())[:200] for joke in value if joke.strip()]
+
+    @field_validator("template")
+    @classmethod
+    def _template(cls, value: str | None) -> str | None:
+        from .templates import BY_ID
+
+        value = (value or "").strip() or None
+        if value and value not in BY_ID:
+            raise ValueError(f"Unknown template '{value}'.")
+        return value
 
     @field_validator("situation")
     @classmethod
@@ -116,6 +152,10 @@ class TrollRequest(BaseModel):
     def _names(cls, value: list[str]) -> list[str]:
         cleaned = [" ".join(name.split())[:40] for name in value]
         return list(dict.fromkeys(name for name in cleaned if name))
+
+    def model_post_init(self, _context) -> None:
+        if self.people and not self.names:
+            self.names = list(dict.fromkeys(p.name.strip() for p in self.people if p.name.strip()))
 
     @property
     def level(self) -> int:
@@ -238,4 +278,5 @@ def options() -> dict:
         "styles": [{"id": k, "label": v[0], "song": k in SONG_STYLES} for k, v in STYLES.items()],
         "intensities": [{"id": i.value, "label": i.value.title()} for i in Intensity],
         "deliveries": [{"id": k, "label": v[0]} for k, v in DELIVERIES.items()],
+        "templates": [t.model_dump() for t in TEMPLATES],
     }

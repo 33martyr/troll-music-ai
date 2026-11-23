@@ -14,6 +14,17 @@ TROLL-MUSIC-AI is for comedy. These are the rules the project is built around.
   never written into error messages. The web app does not receive them.
 - **Local data stays local.** The database and storage directory are in `data/`, which is git-ignored.
 
+- **Friend roasts roast actions, not identities.** Every one-button troll (diss track, roast, meme song,
+  group chat roast, meme video) carries a friendship rule in its prompt: jokes come from the situation the user
+  typed, never about looks, weight, health, race, religion, gender, sexuality, disability or family tragedy,
+  at any intensity, and no surnames, addresses or workplaces even if given. "Brutal" means more exaggeration,
+  not crossing those lines. Like the rest, this is prompt-level guidance and depends on the connected model.
+- **AI scores are opinions.** Battle scorecards are labelled "AI opinion" with the model's name, and the page
+  says the marks are one model's taste and may change if asked again. Friend votes are shown as the verdict.
+- **Parody, not imitation.** Meme Factory designs use invented names ("The Trollies"), a generic player and no
+  real logos or platform branding, and each carries a "PARODY" mark.
+- **Group chat details stay minimal.** Only the names, nicknames and descriptions the user types are sent to
+  the text model; the page says so.
 - **Rap battles are between fictional characters.** The battle prompt tells the model the two rappers are
   made up and to keep it a roast of their invented traits, never a real person.
 - **Optional API key.** `TROLL_API_KEY` puts every route except health behind a bearer key. Media URLs carry a

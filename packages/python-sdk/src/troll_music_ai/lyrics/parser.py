@@ -194,6 +194,64 @@ def parse_section_lines(text: str) -> list[str]:
     return lines
 
 
+def parse_punchlines(text: str, current: str = "") -> list[str]:
+    """Distinct alternatives, without the line they replace."""
+    found = _clean_lines(extract_json(text).get("punchlines"))
+    seen: set[str] = {current.strip().lower()}
+    options = []
+    for line in found:
+        key = line.lower()
+        if key not in seen:
+            seen.add(key)
+            options.append(line[:200])
+    if not options:
+        raise LyricsParseError("The model's response contained no alternative punchlines.")
+    return options
+
+
+_MARKS = ("punchlines", "flow", "creativity", "humor", "entertainment")
+
+
+def _mark(raw: Any) -> int:
+    try:
+        return max(1, min(10, round(float(raw))))
+    except (TypeError, ValueError):
+        raise LyricsParseError("The judges returned a mark that is not a number.") from None
+
+
+def parse_scorecard(text: str, a: str, b: str):
+    """Judges' marks for both rappers. Names are matched loosely; marks are clamped to 1-10."""
+    from ..types import BattleScore, Scorecard
+
+    data = extract_json(text)
+    raw_scores = data.get("scores")
+    if not isinstance(raw_scores, dict):
+        raise LyricsParseError("The judges' response has no 'scores'.")
+
+    def find(name: str) -> dict:
+        for key, value in raw_scores.items():
+            if isinstance(value, dict) and (key.strip().lower() == name.lower() or name.lower() in key.lower()):
+                return value
+        raise LyricsParseError(f"The judges did not score {name}.")
+
+    scores = {}
+    for name in (a, b):
+        raw = find(name)
+        scores[name] = BattleScore(**{m: _mark(raw.get(m)) for m in _MARKS}, comment=str(raw.get("comment") or "").strip()[:300])
+    said = str(data.get("winner") or "").strip().lower()
+    if said in (a.lower(), b.lower()):
+        winner = a if said == a.lower() else b
+    elif said == "draw" or scores[a].overall == scores[b].overall:
+        winner = None
+    else:  # the judges named someone else: fall back to their own marks
+        winner = a if scores[a].overall > scores[b].overall else b
+    announcement = str(data.get("announcement") or "").strip()[:800]
+    if not announcement:
+        raise LyricsParseError("The judges gave no announcement.")
+    best = str(data.get("best_line") or "").strip()[:200] or None
+    return Scorecard(scores=scores, winner=winner, announcement=announcement, best_line=best)
+
+
 _HEADER = re.compile(r"\[(.{1,60})\]|(?:intro|verse|chorus|hook|bridge|outro)[ \d]*:?", re.IGNORECASE)
 
 

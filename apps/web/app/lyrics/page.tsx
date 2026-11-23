@@ -3,6 +3,7 @@
 import {
   Check,
   Copy,
+  Crosshair,
   Download,
   Drum,
   Flame,
@@ -21,6 +22,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ProviderBanner, useTextProvider } from "@/components/ProviderBanner";
+import { PunchlinePanel } from "@/components/punchlines";
 import { Badge, Button, ButtonLink, Card, Empty, Equalizer, Field, Notice, PageHeader } from "@/components/ui";
 import { api, download, errorMessage, waitForJob } from "@/lib/api";
 import { formatWhen, humanize, useLoad } from "@/lib/hooks";
@@ -85,6 +87,7 @@ export default function LyricsPage() {
   const [instruction, setInstruction] = useState("");
   const [importTitle, setImportTitle] = useState("");
   const [importText, setImportText] = useState("");
+  const [punchSection, setPunchSection] = useState<string | null>(null);
 
   const set = <K extends keyof LyricsRequest>(key: K, value: LyricsRequest[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -172,9 +175,9 @@ export default function LyricsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Generator" title="Generate Lyrics">
-        Describe the song. You get a title, verses, a chorus and beat suggestions, and you can rewrite any part
-        without losing the rest.
+      <PageHeader eyebrow="Workshop" title="Lyrics Editor">
+        Fix a bar, rewrite the chorus, or use Punchline mode for five sharper versions of any line. Every change is a
+        new version you can restore.
       </PageHeader>
 
       <div className="mb-6">
@@ -417,6 +420,17 @@ export default function LyricsPage() {
                   >
                     <Copy size={13} /> {copied ? "Copied" : "Copy"}
                   </Button>
+                  {!asset.is_latest && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      disabled={working}
+                      busy={busy === "restore"}
+                      onClick={() => act("restore", async () => show(await api.restoreLyrics(asset.id)))}
+                    >
+                      Restore v{asset.version}
+                    </Button>
+                  )}
                   {history.length > 1 && (
                     <label className="ml-auto flex items-center gap-2 text-xs text-muted">
                       <History size={13} />
@@ -478,7 +492,7 @@ export default function LyricsPage() {
 
               {draft.sections.map((section) => (
                 <Card key={section.id} className="p-4">
-                  <div className="mb-2 flex items-center gap-2">
+                  <div className="mb-2 flex flex-wrap items-center gap-1">
                     <input
                       aria-label="Section name"
                       value={section.label}
@@ -492,6 +506,15 @@ export default function LyricsPage() {
                       size="sm"
                       variant="ghost"
                       className="ml-auto"
+                      disabled={!canGenerate || working || !toLines(section.text).length}
+                      onClick={() => setPunchSection(punchSection === section.id ? null : section.id)}
+                      aria-pressed={punchSection === section.id}
+                    >
+                      <Crosshair size={12} /> Punchlines
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       disabled={!canGenerate || working}
                       busy={busy === `section:${section.id}`}
                       onClick={() => regenerateSection(section.id)}
@@ -507,6 +530,21 @@ export default function LyricsPage() {
                     rows={Math.max(2, section.text.split("\n").length)}
                     className="w-full resize-none overflow-hidden rounded-lg bg-transparent text-[15px] leading-7 outline-none [field-sizing:content] focus:bg-white/[0.03]"
                   />
+                  {punchSection === section.id && (
+                    <PunchlinePanel
+                      lines={toLines(section.text)}
+                      disabled={working}
+                      onClose={() => setPunchSection(null)}
+                      prepare={async () => ({ assetId: (await ensureSaved()).id, sectionId: section.id })}
+                      onChoose={async (index, line) => {
+                        const current = await ensureSaved();
+                        const sections = (current.content?.sections ?? []).map((s) =>
+                          s.id === section.id ? { ...s, lines: s.lines.map((l, i) => (i === index ? line : l)) } : s,
+                        );
+                        show(await api.saveLyrics(current.id, current.content?.title ?? current.title, sections));
+                      }}
+                    />
+                  )}
                 </Card>
               ))}
 

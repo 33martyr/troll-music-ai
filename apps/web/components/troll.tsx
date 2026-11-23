@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, Clapperboard, Copy, Download, FolderOpen, PenLine, RefreshCw, Share2 } from "lucide-react";
+import { Check, Clapperboard, Copy, Download, Factory, FolderOpen, PenLine, RefreshCw, Shuffle, Share2, Swords } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { api, errorMessage, fileUrl } from "@/lib/api";
+import { api, errorMessage, fileUrl, type RemixBody } from "@/lib/api";
 import type { Asset, Intensity, Job, LineTiming, Lyrics, TrollKind, TrollMeta } from "@/lib/types";
 import { JobStatus, OriginBadge, useJobRunner } from "./studio";
 import { Badge, Button, Card, Equalizer, Notice } from "./ui";
@@ -48,19 +48,41 @@ export const DELIVERIES: { id: string; label: string }[] = [
 ];
 
 const JOKES = [
-  "Consulting the group chat archives…",
-  "Teaching the beat some disrespect…",
-  "Finding a rhyme for 'borrowed'…",
-  "Removing anything HR would flag…",
-  "Polishing the punchlines…",
-  "Asking the 808 to hit harder…",
+  "Preparing emotional damage…",
+  "Contacting the rap department…",
+  "Your friend's reputation is loading…",
+  "Sharpening the punchlines…",
+  "Mixing pure disrespect…",
+  "Calling the beat police…",
   "Printing the parental advisory sticker…",
 ];
 
-// --------------------------------- progress -------------------------------- //
+/** Stage labels the backend writes into job.stage ("<label> · <detail>"), in run order. */
+export const STEPS = {
+  words: { label: "Writing the lyrics", emoji: "✍️" },
+  vocals: { label: "Recording the vocals", emoji: "🎤" },
+  beat: { label: "Building the beat", emoji: "🥁" },
+  mix: { label: "Mixing the track", emoji: "🎚️" },
+  cover: { label: "Designing the cover", emoji: "🖼️" },
+  video: { label: "Rendering the video", emoji: "🎬" },
+} as const;
+export type StepId = keyof typeof STEPS;
 
-/** Real job progress, with jokes while it runs. */
-export function TrollProgress({ runner }: { runner: ReturnType<typeof useJobRunner> }) {
+/** Which stages a troll job will run, mirroring backend/services/troll_jobs.py. */
+export function planSteps(kind: TrollKind, opts: { video?: boolean; cover?: boolean; reuseLyrics?: boolean; rewrite?: boolean } = {}): StepId[] {
+  const steps: StepId[] = [];
+  const beatOnly = kind === "funny_beat";
+  if (!beatOnly && (!opts.reuseLyrics || opts.rewrite)) steps.push("words");
+  if (!beatOnly) steps.push("vocals");
+  steps.push("beat");
+  if (!beatOnly) steps.push("mix");
+  if (opts.cover !== false || beatOnly) steps.push("cover");
+  if (kind === "meme_video" || opts.video) steps.push("video");
+  return steps;
+}
+
+/** Real job progress as a timeline of stages, with jokes while it runs. */
+export function TrollProgress({ runner, steps }: { runner: ReturnType<typeof useJobRunner>; steps: StepId[] }) {
   const [tick, setTick] = useState(0);
   const running = runner.busy;
   useEffect(() => {
@@ -70,28 +92,56 @@ export function TrollProgress({ runner }: { runner: ReturnType<typeof useJobRunn
   }, [running]);
   if (!running) return <JobStatus runner={runner} />;
   const job = runner.job;
+  const stage = job?.stage ?? "";
+  const current = steps.findIndex((id) => stage.startsWith(STEPS[id].label));
+  const detail = stage.includes(" · ") ? stage.split(" · ").slice(1).join(" · ") : null;
   return (
-    <Card className="overflow-hidden p-6 text-center">
-      <p className="text-4xl" aria-hidden>
-        {["🎤", "🔥", "💀", "🎶", "🥁"][tick % 5]}
-      </p>
-      <p className="mt-3 font-display text-lg font-bold">{JOKES[tick % JOKES.length]}</p>
-      <p className="mt-1 text-sm text-muted" role="status" aria-live="polite">
-        {job ? (job.status === "queued" ? "In the queue" : job.stage) : "Starting"}
-      </p>
-      <div className="mx-auto mt-5 h-3 max-w-md overflow-hidden rounded-full bg-line" aria-hidden>
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-grape to-volt transition-all duration-700"
-          style={{ width: `${Math.max(4, (job?.progress ?? 0) * 100)}%` }}
-        />
-      </div>
-      <div className="mt-4 flex items-center justify-center gap-3">
-        <Equalizer />
-        <span className="font-mono text-xs text-muted">{Math.round((job?.progress ?? 0) * 100)}%</span>
-        <Button size="sm" variant="ghost" onClick={runner.cancel}>
+    <Card className="overflow-hidden p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-3xl" aria-hidden>
+          {current >= 0 ? STEPS[steps[current]].emoji : "⏳"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-lg font-bold leading-tight">{JOKES[tick % JOKES.length]}</p>
+          <p className="truncate text-xs text-muted" role="status" aria-live="polite">
+            {job ? (job.status === "queued" ? "Waiting in the queue" : detail ?? stage) : "Starting"}
+            {job?.provider ? ` · ${job.provider}${job.model ? ` · ${job.model}` : ""}` : ""}
+          </p>
+        </div>
+        <span className="font-mono text-sm text-muted">{Math.round((job?.progress ?? 0) * 100)}%</span>
+        <Button size="sm" variant="ghost" onClick={runner.cancel} disabled={job?.stage === "Cancelling"}>
           Cancel
         </Button>
       </div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-line" aria-hidden>
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-grape to-volt transition-all duration-700"
+          style={{ width: `${Math.max(3, (job?.progress ?? 0) * 100)}%` }}
+        />
+      </div>
+      <ol className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="Generation steps">
+        {steps.map((id, index) => {
+          const state = current < 0 ? "todo" : index < current ? "done" : index === current ? "now" : "todo";
+          return (
+            <li
+              key={id}
+              aria-current={state === "now" ? "step" : undefined}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                state === "done"
+                  ? "border-volt/30 bg-volt/5 text-fg"
+                  : state === "now"
+                    ? "border-volt bg-volt/10 font-semibold text-fg shadow-[0_0_24px_-10px] shadow-volt"
+                    : "border-line text-muted"
+              }`}
+            >
+              <span aria-hidden className={state === "now" ? "animate-pulse" : ""}>
+                {state === "done" ? "✅" : STEPS[id].emoji}
+              </span>
+              <span className="leading-tight">{STEPS[id].label}</span>
+            </li>
+          );
+        })}
+      </ol>
     </Card>
   );
 }
@@ -248,7 +298,167 @@ function MadeWith({ made }: { made: Made }) {
   );
 }
 
-export function TrollResult({ job, onRegenerate, regenerating }: { job: Job; onRegenerate: () => void; regenerating: boolean }) {
+export type RemixChanges = Omit<RemixBody, "asset_id">;
+
+/** Change the style, heat, delivery, rapper or voice and make it again, keeping the lyrics. */
+function RemixPanel({ troll, onRemix, busy }: { troll: TrollMeta; onRemix: (changes: RemixChanges) => void; busy: boolean }) {
+  const request = troll.request;
+  const [style, setStyle] = useState(troll.style);
+  const [intensity, setIntensity] = useState<Intensity>(troll.intensity);
+  const [delivery, setDelivery] = useState(request?.delivery ?? "cocky");
+  const [rapper, setRapper] = useState(troll.artist);
+  const [instruction, setInstruction] = useState("");
+  const beatOnly = troll.kind === "funny_beat";
+  const changes: RemixChanges = {
+    style: style !== troll.style ? style : null,
+    intensity: !beatOnly && intensity !== troll.intensity ? intensity : null,
+    delivery: !beatOnly && delivery !== (request?.delivery ?? "cocky") ? delivery : null,
+    rapper_name: rapper.trim() && rapper.trim() !== troll.artist ? rapper.trim() : null,
+    instruction: instruction.trim() || null,
+  };
+  const changed = Object.values(changes).some(Boolean);
+  const rewrites = !!(changes.instruction || changes.delivery || changes.intensity);
+  return (
+    <Card className="space-y-4 p-4">
+      <p className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide">
+        <Shuffle size={15} className="text-volt" /> Remix it
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {STYLES.filter((s) => beatOnly || !s.beatOnly).map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setStyle(s.id)}
+            aria-pressed={style === s.id}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${style === s.id ? "border-volt bg-volt text-ink" : "border-line hover:border-grape/60"}`}
+          >
+            {s.emoji} {s.label}
+          </button>
+        ))}
+      </div>
+      {!beatOnly && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-muted">
+            Heat
+            <select className="control mt-1" value={intensity} onChange={(e) => setIntensity(e.target.value as Intensity)}>
+              {INTENSITIES.map((i) => (
+                <option key={i.id} value={i.id}>{`${i.emoji} ${i.label}`}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-muted">
+            Delivery
+            <select className="control mt-1" value={delivery} onChange={(e) => setDelivery(e.target.value)}>
+              {DELIVERIES.map((d) => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs text-muted">
+          Rapper name
+          <input className="control mt-1" value={rapper} maxLength={40} onChange={(e) => setRapper(e.target.value)} />
+        </label>
+        {!beatOnly && (
+          <label className="block text-xs text-muted">
+            Add an inside joke or change
+            <input
+              className="control mt-1"
+              value={instruction}
+              maxLength={500}
+              placeholder="Mention the kebab incident"
+              onChange={(e) => setInstruction(e.target.value)}
+            />
+          </label>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="primary" disabled={!changed} busy={busy} onClick={() => onRemix(changes)}>
+          {!busy && <Shuffle size={14} />} Remix
+        </Button>
+        <p className="text-xs text-muted">
+          {!changed
+            ? "Change something above."
+            : rewrites
+              ? "The lyrics get rewritten for this (new version), then everything is re-performed."
+              : beatOnly
+                ? "New beat and cover. The original stays in My Trolls."
+                : "Same lyrics, new beat, voice and cover. The original stays in My Trolls."}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+/** Redo one person's verse, the chorus or any single section; everything else stays word for word. */
+function RedoParts({ lyrics, onRedo, busy }: { lyrics: Lyrics; onRedo: (sectionId: string, label: string) => void; busy: boolean }) {
+  const seen = new Set<string>();
+  const parts = lyrics.sections.filter((s) => {
+    const key = s.type === "chorus" ? "chorus" : s.id; // every chorus repeat is redone together
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return (
+    <Card className="p-4">
+      <p className="mb-1 flex items-center gap-2 font-display text-sm font-bold uppercase tracking-wide">
+        <RefreshCw size={15} className="text-volt" /> Re-cook one part
+      </p>
+      <p className="mb-3 text-xs text-muted">Rewrites only that section, then re-performs the track. The rest stays word for word.</p>
+      <div className="flex flex-wrap gap-2">
+        {parts.map((section) => (
+          <Button key={section.id} size="sm" disabled={busy} onClick={() => onRedo(section.id, section.label)}>
+            {section.performer ? "🎤 " : section.type === "chorus" ? "🔁 " : ""}
+            {section.label}
+          </Button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function Settings({ troll }: { troll: TrollMeta }) {
+  const request = troll.request;
+  const rows: [string, string | null | undefined][] = [
+    ["Type", troll.label],
+    ["Style", STYLES.find((s) => s.id === troll.style)?.label ?? troll.style],
+    ["Heat", troll.kind === "funny_beat" ? null : INTENSITIES.find((i) => i.id === troll.intensity)?.label],
+    ["Delivery", troll.kind === "funny_beat" ? null : DELIVERIES.find((d) => d.id === request?.delivery)?.label],
+    ["Rapper", troll.artist],
+    ["Template", request?.template],
+    ["Lyrics", troll.lyrics_reused ? "Reused from the original" : null],
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+      {rows
+        .filter(([, value]) => value)
+        .map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-muted">{label}</dt>
+            <dd className="truncate font-medium">{value}</dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
+
+export function TrollResult({
+  job,
+  onRegenerate,
+  onRemix,
+  regenerating,
+}: {
+  job: Job;
+  onRegenerate: () => void;
+  onRemix: (assetId: string, changes: RemixChanges) => void;
+  regenerating: boolean;
+}) {
+  const [remixOpen, setRemixOpen] = useState(false);
+  const [redoOpen, setRedoOpen] = useState(false);
+  const [awards, setAwards] = useState<Asset[]>([]);
+  const awardsRunner = useJobRunner();
   const [made, setMade] = useState<Made | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [time, setTime] = useState(0);
@@ -355,7 +565,7 @@ export function TrollResult({ job, onRegenerate, regenerating }: { job: Job; onR
 
       <div className="flex flex-wrap items-center gap-2">
         {media && <ShareButton asset={media} title={title} caption={caption} />}
-        {media && <DownloadLink asset={media} label={made.video ? "Video (MP4)" : "Song (MP3)"} />}
+        {media && <DownloadLink asset={media} label={made.video ? "Video (MP4)" : made.song?.kind === "beat" ? "Beat (MP3)" : "Song (MP3)"} />}
         {made.video && made.song && <DownloadLink asset={made.song} label="MP3" />}
         {made.cover && <DownloadLink asset={made.cover} label="Cover" />}
         {made.lyrics && (
@@ -374,6 +584,26 @@ export function TrollResult({ job, onRegenerate, regenerating }: { job: Job; onR
         <Button onClick={onRegenerate} busy={regenerating}>
           {!regenerating && <RefreshCw size={14} />} Again, but different
         </Button>
+        {troll?.request && (
+          <Button onClick={() => setRemixOpen(!remixOpen)} aria-expanded={remixOpen}>
+            <Shuffle size={14} /> Remix
+          </Button>
+        )}
+        {troll?.request && made.lyrics?.content && (
+          <Button onClick={() => setRedoOpen(!redoOpen)} aria-expanded={redoOpen}>
+            <RefreshCw size={14} /> Re-cook a part
+          </Button>
+        )}
+        {troll && made.song && (
+          <Link href={`/factory?asset=${made.song.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-raised px-4 py-2.5 text-sm hover:border-grape/60">
+            <Factory size={14} /> Meme Factory
+          </Link>
+        )}
+        {troll?.kind === "rap_battle" && made.song && (
+          <Link href={`/battle?id=${made.song.id}`} className="inline-flex items-center gap-1.5 rounded-lg border border-volt/50 bg-volt/10 px-4 py-2.5 text-sm hover:border-volt">
+            <Swords size={14} /> Judges & votes
+          </Link>
+        )}
         {!made.video && made.song?.kind === "song" && (
           <Button onClick={makeVideo} busy={videoRunner.busy}>
             {!videoRunner.busy && <Clapperboard size={14} />} Make it a meme video
@@ -391,6 +621,42 @@ export function TrollResult({ job, onRegenerate, regenerating }: { job: Job; onR
         )}
       </div>
       {videoRunner.busy || videoRunner.error ? <JobStatus runner={videoRunner} /> : null}
+      {remixOpen && troll && (
+        <RemixPanel troll={troll} busy={regenerating} onRemix={(changes) => onRemix((made.song ?? made.main).id, changes)} />
+      )}
+      {redoOpen && made.lyrics?.content && (
+        <RedoParts
+          lyrics={made.lyrics.content}
+          busy={regenerating}
+          onRedo={(sectionId) => onRemix((made.song ?? made.main).id, { regenerate_sections: [sectionId] })}
+        />
+      )}
+      {troll && made.lyrics && (
+        <div className="space-y-3">
+          <Button
+            busy={awardsRunner.busy}
+            onClick={async () => {
+              const done = await awardsRunner.run(() => api.roastAwards((made.song ?? made.main).id));
+              if (done) setAwards((await Promise.all(done.result_asset_ids.map((id) => api.asset(id)))).filter((a) => a.has_file));
+            }}
+          >
+            🏆 Roast Awards
+          </Button>
+          {awardsRunner.error && <JobStatus runner={awardsRunner} />}
+          {!!awards.length && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {awards.map((card) => (
+                <a key={card.id} href={fileUrl(card, true)} title="Download award card" className="block">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- served by the API with a signed URL */}
+                  <img src={fileUrl(card)} alt={card.title} className="w-full rounded-xl" />
+                  <span className="mt-1 block text-xs text-muted">{card.is_mock ? "Mock judge" : "AI opinion"} · {String(card.meta?.award ?? "")}</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {troll && <Settings troll={troll} />}
       <MadeWith made={made} />
     </section>
   );

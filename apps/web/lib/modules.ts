@@ -1,7 +1,10 @@
 import {
   Clapperboard,
   Drum,
+  Factory,
   Flame,
+  MessagesSquare,
+  Sparkles,
   FolderOpen,
   Image as ImageIcon,
   type LucideIcon,
@@ -21,6 +24,10 @@ export interface NavItem {
 /** The product: one button on the home page, and everything you made. */
 export const NAV_MAIN: NavItem[] = [
   { href: "/", label: "Roast Someone", icon: Flame },
+  { href: "/group", label: "Group Chat Roast", icon: MessagesSquare },
+  { href: "/battle", label: "Roast Battles", icon: Swords },
+  { href: "/factory", label: "Meme Factory", icon: Factory },
+  { href: "/universe", label: "Troll Universe", icon: Sparkles },
   { href: "/projects", label: "My Trolls", icon: FolderOpen },
 ];
 

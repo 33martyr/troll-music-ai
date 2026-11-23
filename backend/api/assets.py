@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 from backend.api.deps import SessionDep, SettingsDep, StorageDep, load_asset, load_project
 from backend.audio import ffmpeg
 from backend.core.errors import ApiError, not_found
-from backend.models.schemas import AssetOut, AssetUpdate
+from backend.models.schemas import AssetOut, AssetUpdate, ZipBody
 from backend.models.tables import AssetKind
 from backend.services import assets as asset_service
 from backend.services.projects import slugify
@@ -143,6 +143,32 @@ def asset_file(file_id: str, session: SessionDep, storage: StorageDep, download:
         content_disposition_type="attachment" if download else "inline",
         headers={"Cache-Control": "private, max-age=3600"},
     )
+
+
+@router.post("/zip")
+def zip_assets(body: ZipBody, session: SessionDep, storage: StorageDep):
+    """Download several files at once (a Meme Factory run, a whole troll) as one ZIP."""
+    import io
+    import zipfile
+
+    buffer = io.BytesIO()
+    names: set[str] = set()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_STORED) as bundle:  # media is already compressed
+        for asset_id in dict.fromkeys(body.asset_ids):
+            asset = load_asset(session, asset_id)
+            if asset.storage_key and storage.exists(asset.storage_key):
+                suffix = asset.storage_key.rsplit(".", 1)[-1]
+                name = f"{slugify(asset.title)}.{suffix}"
+                if name in names:
+                    name = f"{slugify(asset.title)}-{asset.id[:6]}.{suffix}"
+                names.add(name)
+                bundle.write(storage.path(asset.storage_key), name)
+            elif asset.kind == AssetKind.LYRICS and asset.content:
+                bundle.writestr(f"{slugify(asset.title)}.txt", Lyrics.model_validate(asset.content).to_text())
+    if not names and not buffer.getbuffer().nbytes > 22:
+        raise ApiError(422, "validation_error", "None of those assets has a file to download.")
+    filename = f"{slugify(body.name) or 'troll-music-ai'}.zip"
+    return Response(buffer.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.get("/{asset_id}/export")

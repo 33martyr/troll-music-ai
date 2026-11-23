@@ -24,6 +24,7 @@ from .troll import Intensity, TrollKind, TrollRequest, random_troll, rapper_name
 from .types import (
     BattleCharacter,
     BattleRequest,
+    BattleScore,
     BeatRequest,
     ChorusStyle,
     GenerationMeta,
@@ -33,6 +34,7 @@ from .types import (
     LyricStyle,
     RewriteMode,
     RhymeComplexity,
+    Scorecard,
     SectionType,
     SongLength,
 )
@@ -47,6 +49,8 @@ __all__ = [
     "AuthenticationError",
     "BattleCharacter",
     "BattleRequest",
+    "BattleScore",
+    "Scorecard",
     "BeatRequest",
     "JobFailedError",
     "JobInfo",
