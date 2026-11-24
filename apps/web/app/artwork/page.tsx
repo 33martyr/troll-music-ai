@@ -37,7 +37,7 @@ export default function ArtworkPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Visuals" title="Generate Cover Art">
+      <PageHeader eyebrow="Workshop" title="Cover Maker">
         A 1024 × 1024 cover for a track, saved as PNG.
       </PageHeader>
       <div className="mb-6">
@@ -79,7 +79,7 @@ export default function ArtworkPage() {
           {image.capability && !image.capability.is_ai && image.capability.configured && (
             <p className="text-xs leading-relaxed text-muted">
               The built-in engine draws a typographic cover from the title; it ignores style, character and notes.
-              Choose an AI image provider in Model Settings for illustrated covers.
+              Choose an AI image provider in AI Settings for illustrated covers.
             </p>
           )}
         </Card>

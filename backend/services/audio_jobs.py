@@ -106,7 +106,7 @@ def _make_vocals(context: JobContext, lyrics_asset: Asset, bpm: float, span: tup
         if not provider.capabilities.cloning:
             raise FeatureNotAvailableError(
                 f"The active voice provider ({info.name}) cannot use voice profiles. "
-                "Choose a cloning provider such as ElevenLabs or Chatterbox in Model Settings."
+                "Choose a cloning provider such as ElevenLabs or Chatterbox in AI Settings."
             )
         if profile.provider != info.name or not profile.provider_voice_id:
             raise TrollMusicError(
@@ -188,7 +188,7 @@ def convert_vocals(context: JobContext) -> str:
     if not provider.capabilities.conversion:
         raise FeatureNotAvailableError(
             f"The active voice provider ({info.name}) cannot convert vocals. "
-            "ElevenLabs supports this; choose it in Model Settings."
+            "ElevenLabs supports this; choose it in AI Settings."
         )
     if profile.provider != info.name or not profile.provider_voice_id:
         raise TrollMusicError(f"This voice profile was not registered with {info.name}.")
@@ -223,7 +223,7 @@ def _song_from_model(context: JobContext, lyrics_asset: Asset) -> str:
     if not provider.capabilities.with_vocals:
         raise FeatureNotAvailableError(
             f"The active music provider ({info.name}) cannot sing lyrics. "
-            "ACE-Step can; choose it in Model Settings, or mix a beat with spoken vocals instead."
+            "ACE-Step can; choose it in AI Settings, or mix a beat with spoken vocals instead."
         )
     lyrics = Lyrics.model_validate(lyrics_asset.content)
     request = SongRequest(

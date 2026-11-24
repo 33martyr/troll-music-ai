@@ -4,6 +4,7 @@ import { Crown, Dices, Paintbrush, Plus, Swords, Trash2, Users } from "lucide-re
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TrackPlayer } from "@/components/player";
 import { JobStatus, useJobRunner } from "@/components/studio";
 import { DELIVERIES, INTENSITIES, STYLES } from "@/components/troll";
 import { Badge, Button, ButtonLink, Card, Empty, Equalizer, Notice } from "@/components/ui";
@@ -397,7 +398,7 @@ function RivalryDetail({ id, onBack, onChanged }: { id: string; onBack: () => vo
               <Badge>{item.kind === "rap_battle" ? "Battle" : "Diss track"}</Badge>
               {item.settled && <Badge tone="live">{item.winner_id ? `${nameOf(item.winner_id)} won` : "Draw"} · by {item.source}</Badge>}
             </div>
-            {item.track.has_file && <audio controls preload="none" src={fileUrl(item.track)} className="w-full" />}
+            {item.track.has_file && <TrackPlayer src={fileUrl(item.track)} label={item.track.title} knownDuration={item.track.duration_seconds} lazy />}
             {item.kind === "rap_battle" && (
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Link href={`/battle?id=${item.track.id}`} className="text-muted underline hover:text-fg">Judges & votes</Link>

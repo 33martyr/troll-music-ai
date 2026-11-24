@@ -103,7 +103,7 @@ export default function SongPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Full track" title="Generate Song">
+      <PageHeader eyebrow="Workshop" title="Song Mixer">
         Combine lyrics, a beat and vocals into one mixed MP3. Each part stays a separate asset, so you can redo the
         vocals or the mix without touching the rest.
       </PageHeader>
@@ -132,7 +132,7 @@ export default function SongPage() {
                 <Notice tone="info">
                   The active music provider (<span className="font-mono">{music?.provider}</span>) cannot sing lyrics.
                   ACE-Step can: start its server and choose it in{" "}
-                  <Link href="/settings" className="underline">Model Settings</Link>. Until then, use “Beat + vocals”.
+                  <Link href="/settings" className="underline">AI Settings</Link>. Until then, use “Beat + vocals”.
                 </Notice>
               )}
               <Field label="Musical style" hint="optional">

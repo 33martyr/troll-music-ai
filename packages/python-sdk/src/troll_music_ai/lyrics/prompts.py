@@ -40,15 +40,17 @@ protected characteristics, no sexual content about real people, no private infor
 Output:
 - Reply with exactly one JSON object and nothing else. No markdown fences, no commentary."""
 
+# "sections" comes right after the title: small models sometimes stop after the
+# short metadata fields, so the lyrics must be written first.
 SONG_SCHEMA = """\
 {
   "title": "string",
-  "suggested_bpm": 140,
-  "suggested_genre": "string",
-  "beat_notes": ["short production note", "..."],
   "sections": [
     {"type": "intro|verse|chorus|bridge|outro", "label": "Verse 1", "lines": ["one lyric line", "..."]}
-  ]
+  ],
+  "suggested_bpm": 140,
+  "suggested_genre": "string",
+  "beat_notes": ["short production note", "..."]
 }"""
 
 _STYLE_NOTES: dict[LyricStyle, str] = {
@@ -285,10 +287,17 @@ race, religion, gender, sexuality, disability or family tragedy, at any intensit
 - Exaggerate wildly. Specific, absurd images beat generic insults."""
 
 _LEVEL_NOTES = {
-    2: "FRIENDLY: affectionate teasing, the kind you'd say at their birthday",
-    4: "SAVAGE: sharp, relentless punchlines, still clearly playful",
-    5: "BRUTAL: maximum comedic destruction of the behaviour, over-the-top, still within the rules above",
+    "friendly": "FRIENDLY: affectionate teasing, the kind you'd say at their birthday",
+    "savage": "SAVAGE: sharp, relentless punchlines, still clearly playful",
+    "brutal": "BRUTAL: maximum comedic destruction of the behaviour, over-the-top, still within the rules above",
+    "nuclear": (
+        "NUCLEAR: apocalyptic, cinematic hyperbole about the behaviour (end-of-the-world stakes for a tiny "
+        "crime), the most outrageous version you can write. Nuclear means bigger exaggeration, never crossing "
+        "the rules above"
+    ),
 }
+
+_VERSE_LINES = {"short": 6, "standard": 8, "long": 10}
 
 
 def troll_structure(request) -> list[str]:
@@ -302,8 +311,11 @@ def troll_structure(request) -> list[str]:
         return ["Chorus", "Verse 1", "Chorus", "Chorus"]
     if kind is TrollKind.GROUP_ROAST and request.names:
         return ["Intro", *request.names, "Chorus", "Outro"]
-    if kind is TrollKind.MEME_VIDEO:
+    length = getattr(request, "length", "standard")
+    if kind is TrollKind.MEME_VIDEO or length == "short":
         return ["Intro", "Verse 1", "Chorus", "Outro"]
+    if length == "long":
+        return ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Verse 3", "Chorus", "Outro"]
     return ["Intro", "Verse 1", "Chorus", "Verse 2", "Chorus", "Outro"]
 
 
@@ -318,9 +330,9 @@ def _troll_shape(request) -> str:
         )
     if kind is TrollKind.MEME_SONG:
         return (
-            "A ridiculously catchy meme song. The Chorus is 4 short lines built on one chantable hook that repeats "
-            "the target's name; it must be stupidly easy to sing along to and identical every time. Verse 1 is 6 lines "
-            "telling the story."
+            "A ridiculously catchy meme song. The Chorus is 4 short, DIFFERENT lines built around one chantable hook "
+            "that names the target (the hook line may appear at most twice); it must be stupidly easy to sing along "
+            "to, and every Chorus entry repeats the same 4 lines. Verse 1 is 6 lines telling the story."
         )
     if kind is TrollKind.GROUP_ROAST:
         return (
@@ -330,7 +342,7 @@ def _troll_shape(request) -> str:
     if kind is TrollKind.MEME_VIDEO:
         return "A short diss track for a meme video: Intro 2 lines, Verse 1 8 lines, Chorus 4 lines, Outro 2 lines."
     return (
-        "A diss track. Intro: 2 to 4 lines of trash talk. Each verse: 8 lines, building to the hardest punchline "
+        f"A diss track. Intro: 2 to 4 lines of trash talk. Each verse: {_VERSE_LINES[getattr(request, 'length', 'standard')]} lines, building to the hardest punchline "
         "on the last bar. Chorus: 4 lines with one savage hook, identical every time. Outro: 2 to 4 lines."
     )
 
@@ -349,6 +361,8 @@ def troll_messages(request) -> list[ChatMessage]:
         names += f"ARCHETYPE: {template.name}. {template.guidance}\n"
     if request.inside_jokes:
         names += "INSIDE JOKES (work each one in as a callback): " + " | ".join(request.inside_jokes) + "\n"
+    if getattr(request, "instructions", None):
+        names += f"EXTRA INSTRUCTIONS (follow them unless they break the rules below): {request.instructions}\n"
     if getattr(request, "group_name", None):
         names += f"GROUP CHAT NAME: {request.group_name}\n"
     performer = request.rapper_name or "the roaster"
@@ -359,7 +373,7 @@ KIND: {request.kind.value}
 TARGET: {target}
 {names}SITUATION: {request.situation}
 STYLE: {request.genre}
-INTENSITY: {_LEVEL_NOTES[request.level]}
+INTENSITY: {_LEVEL_NOTES[request.intensity.value]}
 DELIVERY: performed by {performer}, as {DELIVERIES[request.delivery][1]}
 LANGUAGE: {request.language}
 LANGUAGE RATING: {rating}

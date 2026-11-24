@@ -30,13 +30,18 @@ export function useTrollSession(anchor: RefObject<HTMLDivElement | null>) {
     }
   }
 
-  async function remix(assetId: string, changes: RemixChanges) {
+  async function remix(assetId: string, changes: RemixChanges, trollKind: TrollKind = kind) {
     const rewrite = !!(changes.instruction || changes.delivery || changes.intensity || changes.regenerate_sections?.length);
-    setSteps(planSteps(kind, { reuseLyrics: kind !== "funny_beat", rewrite }));
+    setSteps(planSteps(trollKind, { reuseLyrics: trollKind !== "funny_beat", rewrite }));
     start();
     const done = await runner.run(() => api.remix({ asset_id: assetId, ...changes }));
     if (done) setResult(done);
   }
 
-  return { runner, steps, result, project, generate, remix };
+  function retried(done: Job) {
+    setResult(done);
+    setProject(done.project_id);
+  }
+
+  return { runner, steps, result, project, generate, remix, retried };
 }

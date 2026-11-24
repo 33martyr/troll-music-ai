@@ -3,8 +3,9 @@
 import { Check, Clapperboard, Copy, Download, Factory, FolderOpen, PenLine, RefreshCw, Shuffle, Share2, Swords } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { formatTime, TrackPlayer } from "./player";
 import { api, errorMessage, fileUrl, type RemixBody } from "@/lib/api";
-import type { Asset, Intensity, Job, LineTiming, Lyrics, TrollKind, TrollMeta } from "@/lib/types";
+import type { Asset, Intensity, Job, LineTiming, Lyrics, TrollKind, TrollMeta, TrollRequest } from "@/lib/types";
 import { JobStatus, OriginBadge, useJobRunner } from "./studio";
 import { Badge, Button, Card, Equalizer, Notice } from "./ui";
 
@@ -36,7 +37,25 @@ export const INTENSITIES: { id: Intensity; emoji: string; label: string; blurb: 
   { id: "friendly", emoji: "😇", label: "Friendly", blurb: "They'll laugh" },
   { id: "savage", emoji: "🔥", label: "Savage", blurb: "They'll need a minute" },
   { id: "brutal", emoji: "💀", label: "Brutal", blurb: "Emotional damage" },
+  { id: "nuclear", emoji: "☢️", label: "Nuclear", blurb: "Friendship may not survive" },
 ];
+
+export const LENGTHS: { id: string; label: string }[] = [
+  { id: "short", label: "Short" },
+  { id: "standard", label: "Standard" },
+  { id: "long", label: "Long" },
+];
+
+/** Mirrors troll.SUBGENRES in the toolkit. */
+export const SUBGENRES: Record<string, { id: string; label: string }[]> = {
+  drill: [{ id: "uk", label: "UK Drill" }, { id: "ny", label: "NY Drill" }, { id: "jersey", label: "Jersey Club Drill" }],
+  trap: [{ id: "rage", label: "Rage" }, { id: "plugg", label: "Plugg" }, { id: "phonk", label: "Phonk" }],
+  "hip-hop": [{ id: "boom-bap", label: "Boom Bap" }, { id: "lofi", label: "Lo-fi" }, { id: "west-coast", label: "West Coast" }],
+  pop: [{ id: "bubblegum", label: "Bubblegum" }, { id: "kpop", label: "K-Pop style" }, { id: "ballad", label: "Power Ballad" }],
+  country: [{ id: "outlaw", label: "Outlaw" }, { id: "bro", label: "Bro-Country" }, { id: "bluegrass", label: "Bluegrass" }],
+  opera: [{ id: "tragic", label: "Tragic Aria" }, { id: "comic", label: "Comic Opera" }, { id: "rock-opera", label: "Rock Opera" }],
+  techno: [{ id: "hard", label: "Hard Techno" }, { id: "eurodance", label: "Eurodance" }, { id: "hyperpop", label: "Hyperpop" }],
+};
 
 export const DELIVERIES: { id: string; label: string }[] = [
   { id: "cocky", label: "😎 Overconfident" },
@@ -48,6 +67,9 @@ export const DELIVERIES: { id: string; label: string }[] = [
 ];
 
 const JOKES = [
+  "Gathering embarrassing evidence…",
+  "Preparing lyrical destruction…",
+  "The group chat won't recover…",
   "Preparing emotional damage…",
   "Contacting the rap department…",
   "Your friend's reputation is loading…",
@@ -82,7 +104,16 @@ export function planSteps(kind: TrollKind, opts: { video?: boolean; cover?: bool
 }
 
 /** Real job progress as a timeline of stages, with jokes while it runs. */
-export function TrollProgress({ runner, steps }: { runner: ReturnType<typeof useJobRunner>; steps: StepId[] }) {
+export function TrollProgress({
+  runner,
+  steps,
+  onRetried,
+}: {
+  runner: ReturnType<typeof useJobRunner>;
+  steps: StepId[];
+  /** Called with the finished job when the user retried a failed one. */
+  onRetried?: (job: Job) => void;
+}) {
   const [tick, setTick] = useState(0);
   const running = runner.busy;
   useEffect(() => {
@@ -90,7 +121,7 @@ export function TrollProgress({ runner, steps }: { runner: ReturnType<typeof use
     const timer = setInterval(() => setTick((value) => value + 1), 2600);
     return () => clearInterval(timer);
   }, [running]);
-  if (!running) return <JobStatus runner={runner} />;
+  if (!running) return <JobStatus runner={runner} onRetried={onRetried} />;
   const job = runner.job;
   const stage = job?.stage ?? "";
   const current = steps.findIndex((id) => stage.startsWith(STEPS[id].label));
@@ -451,8 +482,9 @@ export function TrollResult({
   regenerating,
 }: {
   job: Job;
-  onRegenerate: () => void;
-  onRemix: (assetId: string, changes: RemixChanges) => void;
+  /** Make it again from the original request (passed when the result knows it). */
+  onRegenerate: (original?: TrollRequest) => void;
+  onRemix: (assetId: string, changes: RemixChanges, kind: TrollKind) => void;
   regenerating: boolean;
 }) {
   const [remixOpen, setRemixOpen] = useState(false);
@@ -542,15 +574,25 @@ export function TrollResult({
               </p>
               <h2 className="mt-1 font-display text-2xl font-extrabold leading-tight sm:text-3xl">{title}</h2>
               {troll && <p className="mt-1 text-sm text-muted">Starring {troll.target}. They had it coming.</p>}
+              {troll && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {[
+                    STYLES.find((s) => s.id === troll.style)?.label,
+                    troll.kind !== "funny_beat" ? INTENSITIES.find((i) => i.id === troll.intensity)?.label : null,
+                    troll.kind !== "funny_beat" ? DELIVERIES.find((d) => d.id === troll.request?.delivery)?.label : null,
+                    made.song?.duration_seconds ? formatTime(made.song.duration_seconds) : null,
+                  ]
+                    .filter(Boolean)
+                    .map((chip) => (
+                      <span key={chip} className="rounded-full border border-line bg-ink/50 px-2.5 py-1 text-[11px] font-medium text-muted">
+                        {chip}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
             {!made.video && made.song && (
-              <audio
-                controls
-                autoPlay
-                src={fileUrl(made.song)}
-                onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)}
-                className="w-full"
-              />
+              <TrackPlayer src={fileUrl(made.song)} label={title} knownDuration={made.song.duration_seconds} autoPlay onTime={setTime} />
             )}
             <Karaoke timings={timings} lyrics={made.lyrics?.content} time={time} />
           </div>
@@ -581,7 +623,7 @@ export function TrollResult({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={onRegenerate} busy={regenerating}>
+        <Button onClick={() => onRegenerate(troll?.request)} busy={regenerating}>
           {!regenerating && <RefreshCw size={14} />} Again, but different
         </Button>
         {troll?.request && (
@@ -622,13 +664,13 @@ export function TrollResult({
       </div>
       {videoRunner.busy || videoRunner.error ? <JobStatus runner={videoRunner} /> : null}
       {remixOpen && troll && (
-        <RemixPanel troll={troll} busy={regenerating} onRemix={(changes) => onRemix((made.song ?? made.main).id, changes)} />
+        <RemixPanel troll={troll} busy={regenerating} onRemix={(changes) => onRemix((made.song ?? made.main).id, changes, troll.kind)} />
       )}
-      {redoOpen && made.lyrics?.content && (
+      {redoOpen && troll && made.lyrics?.content && (
         <RedoParts
           lyrics={made.lyrics.content}
           busy={regenerating}
-          onRedo={(sectionId) => onRemix((made.song ?? made.main).id, { regenerate_sections: [sectionId] })}
+          onRedo={(sectionId) => onRemix((made.song ?? made.main).id, { regenerate_sections: [sectionId] }, troll.kind)}
         />
       )}
       {troll && made.lyrics && (

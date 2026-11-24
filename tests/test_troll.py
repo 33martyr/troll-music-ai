@@ -251,3 +251,28 @@ def test_group_chat_roast_gives_each_person_their_section_and_voice(studio):  # 
     for line, spoken in zip(timings, voice.spoken):
         by_label.setdefault(line["label"], set()).add(spoken.voice)
     assert by_label["Dave"] == {"Ada"} and by_label["Sam"] == {"Bob"} and by_label["Intro"] == {None}
+
+
+def test_nuclear_length_subgenre_and_instructions_reach_the_prompt():
+    request = TrollRequest(situation=DAVE, intensity="nuclear", style="trap", subgenre="rage", length="long", instructions="  mention   the scooter ")
+    prompt = troll_messages(request)[-1].content
+    assert "NUCLEAR" in prompt and "never crossing" in prompt and "never who they ARE" in prompt
+    assert "rage trap" in prompt and "mention the scooter" in prompt and "10 lines" in prompt
+    assert troll_structure(request).count("Chorus") == 3
+    assert troll_structure(request.model_copy(update={"length": "short"})) == ["Intro", "Verse 1", "Chorus", "Outro"]
+    assert TrollRequest(situation=DAVE, style="pop", subgenre="rage").subgenre is None  # wrong style: dropped
+    with pytest.raises(ValueError):
+        TrollRequest(situation=DAVE, length="epic")
+
+
+def test_skipped_choruses_are_restored_in_the_requested_order():
+    from troll_music_ai.lyrics.service import conform_to_structure
+    from troll_music_ai.lyrics import parse_lyrics
+
+    raw = parse_lyrics('{"title": "T", "sections": [{"type": "verse", "label": "Verse 1", "lines": ["v"]}, '
+                       '{"type": "chorus", "label": "Chorus", "lines": ["c1", "c2"]}]}')
+    fixed = conform_to_structure(raw, ["Chorus", "Verse 1", "Chorus", "Chorus"])
+    assert [s.label for s in fixed.sections] == ["Chorus", "Verse 1", "Chorus", "Chorus"]
+    assert len({s.id for s in fixed.sections}) == 4 and fixed.sections[0].lines == ["c1", "c2"]
+    odd = parse_lyrics('{"title": "T", "sections": [{"type": "verse", "label": "Bars", "lines": ["x"]}]}')
+    assert conform_to_structure(odd, ["Intro", "Verse 1", "Chorus", "Outro"]) == odd  # too different: untouched

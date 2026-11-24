@@ -57,7 +57,7 @@ export default function VideoPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Visuals" title="Generate Music Video">
+      <PageHeader eyebrow="Workshop" title="Video Maker">
         Plans a storyboard from the song&apos;s sections, creates one image per scene and renders an MP4 with motion,
         fades, the audio and timed lyrics.
       </PageHeader>

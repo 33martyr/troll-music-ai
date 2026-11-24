@@ -22,7 +22,7 @@ export function ProviderBanner({ text, error }: { text: Capability | undefined; 
         <strong>No AI text provider is configured, so lyrics can&apos;t be generated yet.</strong>{" "}
         {text.note}{" "}
         <Link href="/settings" className="underline decoration-grape underline-offset-2">
-          Open Model Settings
+          Open AI Settings
         </Link>{" "}
         to choose one (Pollinations works without a key; Ollama runs locally). You can still import lyrics you
         wrote yourself.
@@ -35,7 +35,7 @@ export function ProviderBanner({ text, error }: { text: Capability | undefined; 
         <strong>Mock provider active.</strong> Generated lyrics are placeholder text, not AI output. Choose a real
         provider in{" "}
         <Link href="/settings" className="underline decoration-grape underline-offset-2">
-          Model Settings
+          AI Settings
         </Link>{" "}
         to write actual songs.
       </Notice>

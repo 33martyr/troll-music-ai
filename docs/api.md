@@ -118,7 +118,10 @@ Stats (1-99) are invented for fun; wins, losses and titles come only from settle
 
 `TrollRequest`: `situation` (required), `kind` (`diss_track`, `roast`, `rap_battle`, `meme_song`, `group_roast`,
 `funny_beat`, `meme_video`), `style` (`drill`, `trap`, `hip-hop`, `pop`, `country`, `opera`, `techno`, and for beats
-`circus`, `8-bit`), `intensity` (`friendly`, `savage`, `brutal`), `delivery` (`cocky`, `hype`, `narrator`, `deadpan`,
+`circus`, `8-bit`), `subgenre` (per style, e.g. trap: `rage`, `plugg`, `phonk`; see `/api/troll/options`; one from
+another style is ignored), `intensity` (`friendly`, `savage`, `brutal`, `nuclear`; Nuclear is maximum exaggeration and
+keeps the same rules), `length` (`short`, `standard`, `long`), `instructions` (free text, up to 300 characters),
+`delivery` (`cocky`, `hype`, `narrator`, `deadpan`,
 `news`, `diva`), `target`, `rapper_name`, `template`, `inside_jokes` (up to 5), `people` (group roast: `name`,
 `nickname`, `description`, `voice`), `group_name`, `voice`, `voice_b` (battle), `explicit`, `language`.
 

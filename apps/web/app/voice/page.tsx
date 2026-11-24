@@ -4,6 +4,7 @@ import { Mic, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
+import { TrackPlayer } from "@/components/player";
 import { AssetSelect, JobStatus, Library, MediaCard, PoweredBy, useCapability, useJobRunner } from "@/components/studio";
 import { Badge, Button, ButtonLink, Card, Field, Notice, PageHeader } from "@/components/ui";
 import { api, errorMessage, voiceSampleUrl } from "@/lib/api";
@@ -78,7 +79,7 @@ export default function VoicePage() {
 
   return (
     <>
-      <PageHeader eyebrow="Vocals" title="Voices">
+      <PageHeader eyebrow="Workshop" title="Voices">
         Hear your lyrics performed, and manage voice profiles. A voice profile is only for a voice you own or have
         explicit permission to use.
       </PageHeader>
@@ -129,7 +130,7 @@ export default function VoicePage() {
             <Notice tone="info">
               The active voice provider can&apos;t clone voices. You can still save a profile and its consent record now;
               to use it, choose a cloning provider (ElevenLabs or Chatterbox) in{" "}
-              <Link href="/settings" className="underline">Model Settings</Link> and create the profile again.
+              <Link href="/settings" className="underline">AI Settings</Link> and create the profile again.
             </Notice>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -199,7 +200,7 @@ export default function VoicePage() {
                     <Trash2 size={13} />
                   </Button>
                 </div>
-                <audio controls preload="none" src={voiceSampleUrl(profile)} className="w-full" />
+                <TrackPlayer src={voiceSampleUrl(profile)} label={`${profile.name} voice sample`} lazy compact />
                 <p className="mt-2 text-xs italic text-muted">“{profile.consent_statement}”</p>
                 {profile.meta?.warnings?.map((warning) => <p key={warning} className="mt-1 text-xs text-amber">{warning}</p>)}
               </Card>

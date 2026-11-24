@@ -5,9 +5,11 @@
 Turn your friends' funniest moments into diss tracks, roasts, rap battles, meme songs and meme videos, then send
 them to the group chat.
 
-Open the app, type what your friend did, pick a type, a style and how hard to go, and press **Generate**. You get
-a mixed track, a fake album cover and, for meme videos, a vertical MP4, with synced lyrics you can share,
-download, remix or edit line by line.
+**Open → roast your mate → generate → laugh → share.** Name the target, spill the tea, pick a weapon (diss track,
+roast, battle...), a genre and flavour, how hard to go (Friendly, Savage, Brutal or Nuclear), a vocal personality
+and a length, and press **Generate**. You get a mixed track, a fake album cover and, for meme videos, a vertical MP4,
+with synced karaoke lyrics you can share, download, remix or edit line by line. Everything you make lands in
+**My Trolls**, where any result can be reopened, replayed and remixed.
 
 - **One button, seven formats:** Diss Track, Savage Roast, Rap Battle, Meme Song, Group Chat Roast, Funny Beat,
   Meme Video.

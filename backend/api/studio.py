@@ -43,7 +43,7 @@ def _check_profile(session, providers, profile_id: str | None) -> None:
     if not provider.capabilities.cloning:  # type: ignore[attr-defined]
         raise FeatureNotAvailableError(
             f"The active voice provider ({provider.info.name}) cannot use voice profiles. "
-            "Choose a cloning provider such as ElevenLabs or Chatterbox in Model Settings."
+            "Choose a cloning provider such as ElevenLabs or Chatterbox in AI Settings."
         )
 
 
@@ -85,7 +85,7 @@ def convert_vocals(body: ConvertVocalsBody, session: SessionDep, queue: QueueDep
     if not provider.capabilities.conversion:  # type: ignore[attr-defined]
         raise FeatureNotAvailableError(
             f"The active voice provider ({provider.info.name}) cannot convert vocals. "
-            "ElevenLabs supports this; choose it in Model Settings."
+            "ElevenLabs supports this; choose it in AI Settings."
         )
     return submit_job(
         session, queue, kind=audio_jobs.JOB_CONVERT, project_id=body.project_id or source.project_id, params=_params(body)
@@ -101,7 +101,7 @@ def generate_song(body: GenerateSongBody, session: SessionDep, queue: QueueDep, 
         if not provider.capabilities.with_vocals:  # type: ignore[attr-defined]
             raise FeatureNotAvailableError(
                 f"The active music provider ({provider.info.name}) cannot sing lyrics. "
-                "ACE-Step can; choose it in Model Settings, or use mix mode."
+                "ACE-Step can; choose it in AI Settings, or use mix mode."
             )
     else:
         if not body.beat_asset_id:

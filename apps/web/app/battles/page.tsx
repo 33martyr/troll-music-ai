@@ -65,7 +65,7 @@ export default function BattlesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Head to head" title="Create Rap Battle">
+      <PageHeader eyebrow="Workshop" title="Battle Builder">
         Two fictional characters trade verses about a topic. The battle is saved as lyrics, so you can edit it, give
         each character a voice and turn it into a song or video.
       </PageHeader>

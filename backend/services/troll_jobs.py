@@ -35,7 +35,7 @@ STEP_MIX = "Mixing the track"
 STEP_COVER = "Designing the cover"
 STEP_VIDEO = "Rendering the video"
 
-_ENERGY = {"friendly": 3, "savage": 4, "brutal": 5}
+_ENERGY = {"friendly": 3, "savage": 4, "brutal": 5, "nuclear": 5}
 
 
 class _Step:
@@ -142,7 +142,7 @@ def generate_troll(context: JobContext) -> str:
         seconds = round(16 * bar, 2) if 16 * bar <= 45 else round(8 * bar, 2)
     beat_request = BeatRequest(
         genre=request.beat_genre, bpm=preset_bpm, mood="playful", energy=_ENERGY[request.intensity.value],
-        duration_seconds=max(5.0, seconds), description=f"funny meme {request.style} beat, comedic, bouncy",
+        duration_seconds=max(5.0, seconds), description=f"funny meme beat, {request.genre}, comedic, bouncy"[:500],
     )
     beat = _run(
         context, audio_jobs.generate_beat,

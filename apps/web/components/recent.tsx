@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { TrackPlayer } from "./player";
 import { api, fileUrl } from "@/lib/api";
 import type { Asset, TrollMeta } from "@/lib/types";
 import { KINDS } from "./troll";
@@ -64,12 +65,14 @@ export function RecentTrolls({ refreshKey }: { refreshKey: string | null }) {
                 </div>
               </div>
             </div>
-            {track.has_file && <audio controls preload="none" src={fileUrl(track)} className="h-9 w-full px-3" />}
-            {track.project_id && (
-              <Link href={`/projects/${track.project_id}`} className="block px-3 pb-3 pt-1 text-xs text-muted hover:text-fg">
-                Open →
-              </Link>
+            {track.has_file && (
+              <div className="px-3">
+                <TrackPlayer src={fileUrl(track)} label={track.title} knownDuration={track.duration_seconds} lazy compact />
+              </div>
             )}
+            <Link href={`/?track=${track.id}`} className="block px-3 pb-3 pt-2 text-xs font-medium text-muted hover:text-volt">
+              Open, share or remix →
+            </Link>
           </article>
         );
       })}

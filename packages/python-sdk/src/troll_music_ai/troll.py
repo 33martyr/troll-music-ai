@@ -31,10 +31,25 @@ class Intensity(StrEnum):
     FRIENDLY = "friendly"
     SAVAGE = "savage"
     BRUTAL = "brutal"
+    NUCLEAR = "nuclear"  # maximum exaggeration; the friendship rules still apply
 
 
 # Maps to the 1-5 scale the lyric prompts already understand.
-INTENSITY_LEVEL = {Intensity.FRIENDLY: 2, Intensity.SAVAGE: 4, Intensity.BRUTAL: 5}
+INTENSITY_LEVEL = {Intensity.FRIENDLY: 2, Intensity.SAVAGE: 4, Intensity.BRUTAL: 5, Intensity.NUCLEAR: 5}
+
+LENGTHS = ("short", "standard", "long")
+
+# style id -> [(subgenre id, label, words for the lyricist and music models)]
+SUBGENRES: dict[str, list[tuple[str, str, str]]] = {
+    "drill": [("uk", "UK Drill", "UK drill"), ("ny", "NY Drill", "New York drill"), ("jersey", "Jersey Club Drill", "jersey club drill")],
+    "trap": [("rage", "Rage", "rage trap with distorted synths"), ("plugg", "Plugg", "dreamy plugg"), ("phonk", "Phonk", "drift phonk, cowbells")],
+    "hip-hop": [("boom-bap", "Boom Bap", "90s boom bap"), ("lofi", "Lo-fi", "lo-fi hip-hop"), ("west-coast", "West Coast", "West Coast g-funk")],
+    "pop": [("bubblegum", "Bubblegum", "bubblegum pop"), ("kpop", "K-Pop style", "K-pop style idol anthem"), ("ballad", "Power Ballad", "dramatic power ballad")],
+    "country": [("outlaw", "Outlaw", "outlaw country"), ("bro", "Bro-Country", "bro-country tailgate anthem"), ("bluegrass", "Bluegrass", "frantic bluegrass")],
+    "opera": [("tragic", "Tragic Aria", "tragic aria"), ("comic", "Comic Opera", "comic opera patter song"), ("rock-opera", "Rock Opera", "rock opera")],
+    "techno": [("hard", "Hard Techno", "hard techno"), ("eurodance", "Eurodance", "90s eurodance"), ("hyperpop", "Hyperpop", "chaotic hyperpop")],
+    "circus": [], "8-bit": [],
+}
 
 KIND_LABELS: dict[TrollKind, str] = {
     TrollKind.DISS_TRACK: "Diss Track",
@@ -93,6 +108,9 @@ class TrollRequest(BaseModel):
     rapper_name: str | None = Field(default=None, max_length=40, description="The roaster's stage name.")
     explicit: bool = False
     language: str = Field(default="English", max_length=40)
+    subgenre: str | None = Field(default=None, max_length=30, description="One of SUBGENRES[style].")
+    length: str = Field(default="standard", description="short, standard or long.")
+    instructions: str | None = Field(default=None, max_length=300, description="Extra instructions for the lyricist.")
     template: str | None = Field(default=None, max_length=40, description="A roast template id (see templates.py).")
     inside_jokes: list[str] = Field(default_factory=list, max_length=5, description="Inside jokes to work in.")
     people: list[Participant] = Field(default_factory=list, max_length=8, description="Group chat roast participants.")
@@ -134,6 +152,25 @@ class TrollRequest(BaseModel):
             raise ValueError(f"Unknown style '{value}'. Choose one of: {', '.join(STYLES)}.")
         return value
 
+    @field_validator("length")
+    @classmethod
+    def _length(cls, value: str) -> str:
+        if value not in LENGTHS:
+            raise ValueError(f"Length must be one of: {', '.join(LENGTHS)}.")
+        return value
+
+    @field_validator("instructions")
+    @classmethod
+    def _instructions(cls, value: str | None) -> str | None:
+        value = " ".join((value or "").split())
+        return value or None
+
+    def model_post_init(self, _context) -> None:
+        if self.people and not self.names:
+            self.names = list(dict.fromkeys(p.name.strip() for p in self.people if p.name.strip()))
+        if self.subgenre and self.subgenre not in {sid for sid, _, _ in SUBGENRES.get(self.style, [])}:
+            self.subgenre = None  # a subgenre from another style is dropped, not an error
+
     @field_validator("delivery")
     @classmethod
     def _delivery(cls, value: str) -> str:
@@ -153,17 +190,14 @@ class TrollRequest(BaseModel):
         cleaned = [" ".join(name.split())[:40] for name in value]
         return list(dict.fromkeys(name for name in cleaned if name))
 
-    def model_post_init(self, _context) -> None:
-        if self.people and not self.names:
-            self.names = list(dict.fromkeys(p.name.strip() for p in self.people if p.name.strip()))
-
     @property
     def level(self) -> int:
         return INTENSITY_LEVEL[self.intensity]
 
     @property
     def genre(self) -> str:
-        return STYLES[self.style][1]
+        sub = next((words for sid, _, words in SUBGENRES.get(self.style, []) if sid == self.subgenre), None)
+        return f"{sub}, {STYLES[self.style][1]}" if sub else STYLES[self.style][1]
 
     @property
     def beat_genre(self) -> str:
@@ -277,6 +311,8 @@ def options() -> dict:
         "kinds": [{"id": k.value, "label": v} for k, v in KIND_LABELS.items()],
         "styles": [{"id": k, "label": v[0], "song": k in SONG_STYLES} for k, v in STYLES.items()],
         "intensities": [{"id": i.value, "label": i.value.title()} for i in Intensity],
+        "subgenres": {style: [{"id": sid, "label": label} for sid, label, _ in subs] for style, subs in SUBGENRES.items()},
+        "lengths": list(LENGTHS),
         "deliveries": [{"id": k, "label": v[0]} for k, v in DELIVERIES.items()],
         "templates": [t.model_dump() for t in TEMPLATES],
     }

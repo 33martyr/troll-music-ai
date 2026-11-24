@@ -91,7 +91,7 @@ class ProviderManager:
         if provider is None:
             raise ProviderNotConfiguredError(
                 error
-                or f"No {LABELS[kind].lower()} provider is configured. Choose one in Model Settings."
+                or f"No {LABELS[kind].lower()} provider is configured. Choose one in AI Settings."
             )
         return provider
 

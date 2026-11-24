@@ -68,7 +68,7 @@ export default function BeatPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Instrumental" title="Generate Beat">
+      <PageHeader eyebrow="Workshop" title="Beat Maker">
         Make an instrumental on its own, or upload one you already have. Beats are saved as MP3 and can be reused in
         any number of songs.
       </PageHeader>

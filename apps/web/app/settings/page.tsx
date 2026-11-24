@@ -258,7 +258,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Configuration" title="Model Settings">
+      <PageHeader eyebrow="Under the hood" title="AI Settings">
         Choose which provider and model does each job. Changes apply immediately, override{" "}
         <code className="font-mono text-fg">.env</code>, and are stored on the backend at{" "}
         <code className="font-mono text-fg">{API_URL}</code>. API keys are never sent back to the browser.

@@ -4,6 +4,7 @@ import { Check, Gavel, Link2, Swords } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { TrackPlayer } from "@/components/player";
 import { Badge, Button, ButtonLink, Card, Empty, Equalizer, Notice } from "@/components/ui";
 import { api, errorMessage, fileUrl } from "@/lib/api";
 import { useLoad } from "@/lib/hooks";
@@ -227,7 +228,7 @@ function BattlePage({ id }: { id: string }) {
 
       {song?.has_file && (
         <Card className="p-4">
-          <audio controls src={fileUrl(song)} className="w-full" />
+          <TrackPlayer src={fileUrl(song)} label={song.title} knownDuration={song.duration_seconds} />
           <div className="mt-3 flex flex-wrap gap-2">
             <ButtonLink size="sm" href={`/factory?asset=${song.id}`}>Meme Factory</ButtonLink>
             {song.project_id && <ButtonLink size="sm" href={`/projects/${song.project_id}`}>Files</ButtonLink>}

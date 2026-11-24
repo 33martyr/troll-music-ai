@@ -244,3 +244,18 @@ def test_unclosed_line_arrays_from_small_models_are_repaired():
     # A "sections" list reopened inside the last section, outer list never closed.
     nested = '{"title":"T","sections":[{"type":"verse","label":"Round 1","lines":["a"],"sections":[{"type":"outro","label":"Outro","lines":["z"]}]}'
     assert [s.label for s in parse_lyrics(nested).sections] == ["Round 1", "Outro"]
+
+
+def test_a_retry_tells_the_model_what_was_wrong():
+    provider = ScriptedProvider('{"title": "Only metadata", "suggested_bpm": 140}', SONG)
+    lyrics = run(LyricsService(provider, max_attempts=2).generate(REQUEST))
+    assert lyrics.title == "Lambo On Layaway"
+    retry = provider.requests[1].messages
+    assert retry[-2].role == "assistant" and "Only metadata" in retry[-2].content
+    assert "no 'sections' list" in retry[-1].content and "every section" in retry[-1].content
+
+
+def test_song_schema_asks_for_sections_before_metadata():
+    from troll_music_ai.lyrics.prompts import SONG_SCHEMA
+
+    assert SONG_SCHEMA.index('"sections"') < SONG_SCHEMA.index('"suggested_bpm"')

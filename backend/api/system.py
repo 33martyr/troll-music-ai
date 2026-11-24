@@ -41,7 +41,7 @@ def capabilities(providers: ProvidersDep):
         provider = providers.get(kind)
         item = CapabilityOut(kind=kind, label=LABELS[kind], implemented=True, configured=provider is not None)
         if provider is None:
-            item.note = providers.error(kind) or "Not configured. Choose a provider in Model Settings."
+            item.note = providers.error(kind) or "Not configured. Choose a provider in AI Settings."
         else:
             info = provider.info
             item.provider, item.model, item.endpoint = info.name, info.model, info.endpoint

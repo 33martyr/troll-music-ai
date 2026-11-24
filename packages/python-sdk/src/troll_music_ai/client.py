@@ -416,7 +416,9 @@ class AsyncTrollMusicClient:
 
         Returns the video if one was made, otherwise the song (or the beat for
         ``funny_beat``). ``asset.job.result_asset_ids`` lists every file made.
-        ``options``: target, names, rapper_name, delivery, explicit, language.
+        ``options``: target, names, people, rapper_name, delivery, subgenre, length
+        (short, standard, long), instructions, template, inside_jokes, voice, explicit, language.
+        ``intensity``: friendly, savage, brutal or nuclear.
         """
         request = {"situation": situation, "kind": kind, "style": style, "intensity": intensity, **options}
         body = {"project_id": _id(project), "request": request, "with_video": with_video, "with_cover": with_cover}

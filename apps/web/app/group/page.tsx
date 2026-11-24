@@ -178,7 +178,7 @@ export default function GroupRoastPage() {
       </form>
 
       <div ref={anchor} className="scroll-mt-20 space-y-4">
-        {(session.runner.busy || session.runner.error) && <TrollProgress runner={session.runner} steps={session.steps} />}
+        {(session.runner.busy || session.runner.error) && <TrollProgress runner={session.runner} steps={session.steps} onRetried={session.retried} />}
         {session.result && !session.runner.busy && (
           <TrollResult
             job={session.result}

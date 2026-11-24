@@ -7,7 +7,7 @@ from collections.abc import Callable
 from ..errors import LyricsParseError
 from ..providers.base import ChatMessage, TextGenerationProvider, TextRequest
 from ..troll import TrollKind, TrollRequest
-from ..types import BattleCharacter, BattleRequest, GenerationMeta, Lyrics, LyricsRequest, LyricStyle, RewriteMode, Scorecard, SectionType
+from ..types import BattleCharacter, BattleRequest, GenerationMeta, Lyrics, LyricSection, LyricsRequest, LyricStyle, RewriteMode, Scorecard, SectionType, _new_id
 from . import prompts
 from .parser import parse_characters, parse_lyrics, parse_punchlines, parse_scorecard, parse_section_lines
 
@@ -27,6 +27,33 @@ _TROLL_STYLE = {
     TrollKind.RAP_BATTLE: LyricStyle.DISS_TRACK,
     TrollKind.FUNNY_BEAT: LyricStyle.FUNNY,
 }
+
+
+def conform_to_structure(lyrics: Lyrics, structure: list[str]) -> Lyrics:
+    """Put sections in the requested order and restore choruses a model skipped.
+
+    Small models sometimes drop a repeated chorus or shuffle sections. If most
+    requested labels are present, rebuild in order, reusing the chorus where one
+    is missing; otherwise leave the lyrics as the model wrote them.
+    """
+    pool: dict[str, list[LyricSection]] = {}
+    for section in lyrics.sections:
+        pool.setdefault(section.label.strip().lower(), []).append(section)
+    first_chorus = next((s for s in lyrics.sections if s.type is SectionType.CHORUS), None)
+    matched = sum(1 for label in dict.fromkeys(structure) if label.lower() in pool)
+    if matched < max(1, len(set(structure)) * 0.6):
+        return lyrics
+    used: set[str] = set()
+    ordered: list[LyricSection] = []
+    for label in structure:
+        candidates = [s for s in pool.get(label.lower(), []) if s.id not in used]
+        if candidates:
+            ordered.append(candidates[0])
+            used.add(candidates[0].id)
+        elif label.lower() == "chorus" and first_chorus is not None:
+            ordered.append(first_chorus.model_copy(update={"id": _new_id()}))
+    leftovers = [s for s in lyrics.sections if s.id not in used and s.type is not SectionType.CHORUS]
+    return lyrics.model_copy(update={"sections": ordered + leftovers})
 
 
 def lyrics_request_for(request: TrollRequest) -> LyricsRequest:
@@ -94,17 +121,30 @@ class LyricsService:
     async def _ask(self, messages: list[ChatMessage], parse, progress: ProgressCallback):
         """Call the model and parse; retry when the output is unusable."""
         last_error: LyricsParseError | None = None
+        conversation = list(messages)
         for attempt in range(1, self._max_attempts + 1):
             stage = "Writing" if attempt == 1 else f"Retrying (attempt {attempt})"
             progress(0.15, stage)
             result = await self._provider.generate_text(
-                TextRequest(messages=messages, json_mode=self._json_mode)
+                TextRequest(messages=conversation, json_mode=self._json_mode)
             )
             progress(0.85, "Structuring the lyrics")
             try:
                 return parse(result.text), result.model
             except LyricsParseError as exc:
                 last_error = exc
+                # Tell the model what was wrong instead of asking the same thing again.
+                conversation = [
+                    *messages,
+                    ChatMessage(role="assistant", content=result.text[:4000]),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            f"That reply could not be used: {exc.message} Reply again with the complete JSON "
+                            "object in the requested shape, including every section with its lines. JSON only."
+                        ),
+                    ),
+                ]
         assert last_error is not None
         raise LyricsParseError(
             f"{last_error.message} Tried {self._max_attempts} time(s). "
@@ -224,6 +264,7 @@ class LyricsService:
             lambda text: parse_lyrics(text, language=request.language, explicit=request.explicit),
             on_progress or _noop,
         )
+        lyrics = conform_to_structure(lyrics, prompts.troll_structure(request))
         if request.kind is TrollKind.GROUP_ROAST:
             # Whoever a section is about is its performer's target, not its performer:
             # keep the label so the video and editor show the name.

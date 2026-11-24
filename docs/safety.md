@@ -28,6 +28,8 @@ TROLL-MUSIC-AI is for comedy. These are the rules the project is built around.
 - **Troll Universe rappers are fictional and private.** The prompt forbids basing a rapper on a real person or
   artist or using real artists' names. There are no public profiles; rappers, cards and rivalries stay in this
   installation and can be deleted at any time.
+- **Unusable model output is never passed off as lyrics.** If the model's reply has no usable sections, the
+  service tells the model what was wrong and asks once more; if that fails too, the job fails with the reason.
 - **Rate limits are respected.** When a free provider says to wait (Pollinations: one reply per 45 s per IP),
   the text adapter waits and retries up to twice (60 s max per wait) instead of hammering it.
 - **Rap battles are between fictional characters.** The battle prompt tells the model the two rappers are

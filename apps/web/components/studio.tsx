@@ -3,6 +3,7 @@
 import { Download, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useRef, useState } from "react";
+import { TrackPlayer } from "./player";
 import { api, errorMessage, fileUrl, isActive, waitForJob } from "@/lib/api";
 import { formatWhen, useLoad } from "@/lib/hooks";
 import type { Asset, Capability, Job } from "@/lib/types";
@@ -22,7 +23,7 @@ export function PoweredBy({ capability, error, what }: { capability: Capability 
   if (!capability) return null;
   const settings = (
     <Link href="/settings" className="underline decoration-grape underline-offset-2">
-      Model Settings
+      AI Settings
     </Link>
   );
   if (!capability.configured) {
@@ -274,7 +275,7 @@ export function MediaCard({
   ].filter(Boolean);
 
   return (
-    <Card className="p-4">
+    <Card className="min-w-0 p-4">
       <div className="mb-3 flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1 basis-48">
           <p className="truncate font-medium">{asset.title}</p>
@@ -286,7 +287,7 @@ export function MediaCard({
       </div>
 
       {asset.has_file && asset.mime_type?.startsWith("audio/") && (
-        <audio controls preload="none" src={fileUrl(asset)} className="w-full" />
+        <TrackPlayer src={fileUrl(asset)} label={asset.title} knownDuration={asset.duration_seconds} lazy />
       )}
       {asset.has_file && asset.mime_type?.startsWith("video/") && (
         <video controls preload="metadata" src={fileUrl(asset)} className="max-h-[70vh] w-full rounded-lg bg-black" />

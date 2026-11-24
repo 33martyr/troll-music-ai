@@ -81,7 +81,7 @@ class RivalryTrackBody(BaseModel):
     from_id: str | None = Field(default=None, description="Diss tracks: who disses whom (the other rapper is the target).")
     situation: str | None = Field(default=None, max_length=600)
     style: str | None = None
-    intensity: Literal["friendly", "savage", "brutal"] = "savage"
+    intensity: Literal["friendly", "savage", "brutal", "nuclear"] = "savage"
     with_video: bool = False
 
 

@@ -34,7 +34,8 @@ class MockTextProvider(TextGenerationProvider):
 
     async def generate_text(self, request: TextRequest) -> TextResult:
         self.calls.append(request)
-        prompt = request.messages[-1].content
+        # After a correction message the task is in an earlier turn.
+        prompt = next((m.content for m in reversed(request.messages) if "TASK:" in m.content), request.messages[-1].content)
         task = _field(prompt, "TASK") or "generate_lyrics"
 
         if task == "regenerate_section":

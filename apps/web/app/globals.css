@@ -109,3 +109,48 @@ select.control {
     animation: none;
   }
 }
+
+/* Range inputs used by the audio player: invisible track (the bar is drawn
+   underneath), a round thumb that grows on hover, a visible focus ring. */
+.player-range {
+  appearance: none;
+  background: transparent;
+  margin: 0;
+}
+.player-range:focus-visible {
+  outline: 2px solid var(--color-volt);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+.player-range::-webkit-slider-runnable-track {
+  height: 20px;
+  background: transparent;
+}
+.player-range::-moz-range-track {
+  height: 6px;
+  background: transparent;
+}
+.player-range::-webkit-slider-thumb {
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  margin-top: 3px;
+  border-radius: 999px;
+  background: var(--color-fg);
+  box-shadow: 0 0 0 3px rgb(200 255 62 / 0.25);
+  transition: transform 0.15s;
+}
+.player-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-fg);
+}
+.player-range:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+.player-range:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

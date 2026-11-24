@@ -83,7 +83,7 @@ export interface AssetMeta {
 // ---------------------------------- troll ---------------------------------- //
 
 export type TrollKind = "diss_track" | "roast" | "rap_battle" | "meme_song" | "group_roast" | "funny_beat" | "meme_video";
-export type Intensity = "friendly" | "savage" | "brutal";
+export type Intensity = "friendly" | "savage" | "brutal" | "nuclear";
 
 export interface TrollRequest {
   situation: string;
@@ -97,6 +97,9 @@ export interface TrollRequest {
   explicit?: boolean;
   language?: string;
   template?: string | null;
+  subgenre?: string | null;
+  length?: string;
+  instructions?: string | null;
   inside_jokes?: string[];
   people?: Participant[];
   group_name?: string | null;
