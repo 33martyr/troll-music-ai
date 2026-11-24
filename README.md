@@ -49,7 +49,7 @@ AI provider per capability in Model Settings or `.env`.
 | Beats | NumPy drum machine and synth: exact BPM and length | **MusicGen** (local, weights download is manual), **ACE-Step 1.5** (local server, sings lyrics), ElevenLabs Music |
 | Vocals | OS speech engine (pyttsx3) | OpenAI-compatible speech (OpenAI, Kokoro), **ElevenLabs** (cloning, voice conversion), Chatterbox (local cloning) |
 | Cover art, video scenes | Typographic title cards (Pillow) | **Pollinations** images (tested), OpenAI-compatible images, ComfyUI |
-| Song | FFmpeg mix of your beat and vocals, or a full sung song from ACE-Step | |
+| Song | FFmpeg mix of your beat and vocals | Full sung songs from **ACE-Step** or **ElevenLabs Music** |
 | Music video | FFmpeg: scene stills with motion, fades, audio and burned-in synced lyrics → MP4 | no AI video-animation model is integrated |
 
 What "tested" means here, and what has not been run against the real service, is spelled out in
@@ -57,9 +57,11 @@ What "tested" means here, and what has not been run against the real service, is
 were run for real; MusicGen needs its weights downloaded first; ACE-Step, ElevenLabs, OpenAI, Chatterbox and
 ComfyUI adapters follow their documented APIs and are covered by mocked tests only.
 
-**About vocals.** None of the voice providers sing. Lines are performed as rhythmic speech placed on the beat
-grid (one bar per line, sections on even bars), and every vocal asset says `delivery: spoken`. For actually
-sung vocals, use ACE-Step's full-song mode.
+**About vocals.** Out of the box, vocals are spoken by your system's voice, placed on the beat grid, and labelled
+"Spoken, not sung". For **real sung and rapped vocals**, choose a music provider that sings: ACE-Step 1.5 (free,
+local GPU) or ElevenLabs Music (paid plan). Then every roast is performed as a full song by the AI model, lyrics
+included. Neither has been run against the real service from this repository yet; see
+[docs/models.md](docs/models.md#full-songs-with-ai-vocals) for setup, costs and what is not guaranteed.
 
 Also included: projects (duplicate, export a zip with media), version history, uploads of your own beats and
 vocals, consent-gated voice profiles, job progress / cancel / retry, optional API-key auth, and a Python SDK.
@@ -106,7 +108,7 @@ pip install -e ".[musicgen]"              # torch + transformers; use the CUDA b
 python scripts/download_models.py musicgen  # about 2.4 GB, CC-BY-NC (non-commercial)
 ```
 
-Then choose MusicGen in Model Settings. See [docs/models.md](docs/models.md) for ACE-Step, Chatterbox and ComfyUI.
+Then choose MusicGen in AI Settings. See [docs/models.md](docs/models.md) for ACE-Step, Chatterbox and ComfyUI.
 
 ## Python SDK
 

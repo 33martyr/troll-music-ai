@@ -180,7 +180,14 @@ def streaming_card(
     return _save(image, out_path)
 
 
-def _paste_square(image, picture: Path | None, box: tuple[int, int, int, int], fallback_colour) -> None:
+def _initials(name: str) -> str:
+    skip = {"the", "tha", "da", "of", "a", "an"}
+    words = [w for w in name.replace("-", " ").split() if w[:1].isalnum() and w.lower() not in skip]
+    return "".join(w[0] for w in words[:2]).upper() or "?"
+
+
+def _paste_square(image, picture: Path | None, box: tuple[int, int, int, int], fallback_colour, name: str = "") -> None:
+    """Paste the portrait, or draw a placeholder: a silhouette with the rapper's initials."""
     from PIL import Image, ImageDraw
 
     left, top, right, bottom = box
@@ -190,8 +197,20 @@ def _paste_square(image, picture: Path | None, box: tuple[int, int, int, int], f
         side = min(art.size)
         art = art.crop(((art.width - side) // 2, (art.height - side) // 2, (art.width + side) // 2, (art.height + side) // 2))
         image.paste(art.resize((right - left, bottom - top), Image.LANCZOS), (left, top))
-    else:
-        ImageDraw.Draw(image).rectangle(box, fill=(*fallback_colour, 255))
+        return
+    draw = ImageDraw.Draw(image)
+    draw.rectangle(box, fill=(*fallback_colour, 255))
+    w, h = right - left, bottom - top
+    shade = tuple(max(0, int(c * 0.72)) for c in fallback_colour)
+    # Head and shoulders, in a darker shade of the card colour.
+    draw.ellipse((left + w * 0.32, top + h * 0.16, left + w * 0.68, top + h * 0.52), fill=(*shade, 255))
+    draw.pieslice((left + w * 0.14, top + h * 0.56, left + w * 0.86, top + h * 1.44), 180, 360, fill=(*shade, 255))
+    if name:
+        font = _font(int(h * 0.2))
+        text = _initials(name)
+        tb = draw.textbbox((0, 0), text, font=font)
+        draw.text((left + (w - (tb[2] - tb[0])) / 2 - tb[0], top + h * 0.34 - (tb[3] - tb[1]) / 2 - tb[1]), text, font=font,
+                  fill=(255, 255, 255, 235), stroke_width=max(2, h // 120), stroke_fill=(0, 0, 0, 200))
 
 
 def rapper_card(
@@ -211,7 +230,7 @@ def rapper_card(
         draw.line((0, i, width, i), fill=(*colour, 255))
     draw.rounded_rectangle((14, 14, width - 14, height - 14), radius=36, outline=(*look["accent"], 255), width=8)
     portrait = (95, 110, width - 95, 110 + width - 190)
-    _paste_square(image, avatar, portrait, look["second"])
+    _paste_square(image, avatar, portrait, look["second"], name)
     draw = ImageDraw.Draw(image)
     draw.rectangle(portrait, outline=(*look["accent"], 255), width=4)
     # Overall badge, top-left, overlapping the portrait.
@@ -254,8 +273,8 @@ def rivalry_poster(
     top = int(height * 0.2) if size == "9:16" else int(height * 0.22)
     gap = int(unit * 0.04)
     left_a = width // 2 - side - gap // 2
-    _paste_square(image, avatar_a, (left_a, top, left_a + side, top + side), look["accent"])
-    _paste_square(image, avatar_b, (width // 2 + gap // 2, top, width // 2 + gap // 2 + side, top + side), look["second"])
+    _paste_square(image, avatar_a, (left_a, top, left_a + side, top + side), look["accent"], a)
+    _paste_square(image, avatar_b, (width // 2 + gap // 2, top, width // 2 + gap // 2 + side, top + side), look["second"], b)
     draw = ImageDraw.Draw(image)
     y = height * 0.05
     y = _centered(draw, "THE RIVALRY", y, width, _font(unit // 14), look["accent"], stroke=3)

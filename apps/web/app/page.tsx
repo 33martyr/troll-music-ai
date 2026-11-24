@@ -19,6 +19,7 @@ import {
   type StepId,
   TrollProgress,
   TrollResult,
+  VOCAL_STYLES,
 } from "@/components/troll";
 import { Badge, Button, Notice } from "@/components/ui";
 import { api, errorMessage, fileUrl } from "@/lib/api";
@@ -45,6 +46,7 @@ const DEFAULTS: TrollRequest = {
   rapper_name: "",
   explicit: false,
   instructions: "",
+  vocal_style: "auto",
 };
 
 function Chip({ active, onClick, children, tone = "volt" }: { active: boolean; onClick: () => void; children: React.ReactNode; tone?: "volt" | "grape" }) {
@@ -95,6 +97,7 @@ function Engines({ kind }: { kind: string }) {
       </Notice>
     );
   }
+  const singer = needsWords && music.capability?.sings ? music.capability : null;
   return (
     <p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted">
       {needsWords && words && (
@@ -103,13 +106,19 @@ function Engines({ kind }: { kind: string }) {
           {words.is_mock ? <Badge tone="mock">Mock, not real AI</Badge> : <Badge tone="grape">AI</Badge>}
         </>
       )}
-      {music.capability && (
+      {singer && (
+        <>
+          · Sung by <span className="font-mono text-fg">{singer.model ?? singer.provider}</span>
+          {singer.is_mock ? <Badge tone="mock">Mock, not real AI</Badge> : <Badge tone="grape">AI vocals + beat</Badge>}
+        </>
+      )}
+      {!singer && music.capability && (
         <>
           · Beat by <span className="font-mono text-fg">{music.capability.provider}</span>
           {music.capability.is_ai ? <Badge tone="grape">AI</Badge> : <Badge>Built-in</Badge>}
         </>
       )}
-      {needsWords && voice.capability && (
+      {needsWords && !singer && voice.capability && (
         <>
           · Voice by <span className="font-mono text-fg">{voice.capability.provider}</span>
           <Badge tone="mock">Spoken, not sung</Badge>
@@ -203,6 +212,7 @@ export default function RoastPage() {
   const params = useSearchParams();
   const [rapperId, setRapperId] = useState("");
   const runner = useJobRunner();
+  const sung = !!useCapability("music").capability?.sings;
   const resultRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -281,7 +291,7 @@ export default function RoastPage() {
       voice_b: form.voice_b || null,
     };
     const video = withVideo && request.kind !== "meme_video";
-    setSteps(planSteps(request.kind, { video }));
+    setSteps(planSteps(request.kind, { video, sung }));
     setResult(null);
     resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     const done = await runner.run(() => api.troll(request, projectId, { with_video: video }));
@@ -294,7 +304,7 @@ export default function RoastPage() {
   async function remix(assetId: string, changes: RemixChanges, kind: TrollKind) {
     if (!result) return;
     const rewrite = !!(changes.instruction || changes.delivery || changes.intensity || changes.regenerate_sections?.length);
-    setSteps(planSteps(kind, { reuseLyrics: kind !== "funny_beat", rewrite }));
+    setSteps(planSteps(kind, { reuseLyrics: kind !== "funny_beat", rewrite, sung }));
     setResult(null);
     resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     const done = await runner.run(() => api.remix({ asset_id: assetId, ...changes }));
@@ -527,6 +537,18 @@ export default function RoastPage() {
                 </Chip>
               ))}
             </div>
+            {sung && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted">Singing voice: a direction for the AI singer, not a guarantee. Always an original voice.</p>
+                <div className="flex flex-wrap gap-2">
+                  {VOCAL_STYLES.map((v) => (
+                    <Chip key={v.id} tone="grape" active={(form.vocal_style ?? "auto") === v.id} onClick={() => set("vocal_style", v.id)}>
+                      {v.label}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted">Length:</span>
               {LENGTHS.map((length) => (

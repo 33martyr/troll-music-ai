@@ -29,6 +29,7 @@ JOB_TROLL = "troll.generate"
 # Stage labels, in the order they run. The web app's timeline reads them from
 # the job's ``stage`` ("<label> · <detail>"), so keep them stable.
 STEP_WORDS = "Writing the lyrics"
+STEP_SING = "Performing the song"  # one call to a music model that sings: no separate beat or mix
 STEP_VOCALS = "Recording the vocals"
 STEP_BEAT = "Building the beat"
 STEP_MIX = "Mixing the track"
@@ -83,6 +84,15 @@ def _second_voice(context: JobContext) -> str | None:
     return voices[1] if len(voices) > 1 else None
 
 
+def _singer(context: JobContext):
+    """The music provider, when it can sing whole songs and singing wasn't turned off."""
+    if context.params.get("vocals") == "spoken":
+        return None
+    provider = context.providers.get("music")
+    capabilities = getattr(provider, "capabilities", None)
+    return provider if capabilities is not None and capabilities.with_vocals else None
+
+
 def generate_troll(context: JobContext) -> str:
     request = TrollRequest.model_validate(context.params["request"])
     with_video = request.kind is TrollKind.MEME_VIDEO or bool(context.params.get("with_video"))
@@ -122,9 +132,23 @@ def generate_troll(context: JobContext) -> str:
     title = (lyrics_asset.content or {}).get("title") if lyrics_asset else None
     title = title or beat_title(request)
 
-    # ---- 2. performance: vocals first, so the beat is cut to fit them ----
+    # ---- 2a. a music model that sings performs the whole song in one go ----
+    sung: Asset | None = None
+    singer_failed = False
+    if lyrics_asset is not None and _singer(context) is not None:
+        try:
+            sung = _run(
+                context, audio_jobs.generate_song,
+                {"mode": "model", "lyrics_asset_id": lyrics_asset.id, "title": title, "style_prompt": request.song_style},
+                (0.3, 0.8), STEP_SING,
+            )
+        except TrollMusicError as exc:
+            singer_failed = True
+            warnings.append(f"The AI singer failed ({exc.message}) so this version has spoken vocals over the built-in beat instead.")
+
+    # ---- 2b. otherwise: spoken vocals first, so the beat is cut to fit them ----
     vocals: Asset | None = None
-    if lyrics_asset is not None:
+    if lyrics_asset is not None and sung is None:
         voice_b = request.voice_b or (_second_voice(context) if request.kind is TrollKind.RAP_BATTLE else None)
         section_voices = {p.name: p.voice for p in request.people if p.voice}
         vocals = _run(
@@ -144,16 +168,21 @@ def generate_troll(context: JobContext) -> str:
         genre=request.beat_genre, bpm=preset_bpm, mood="playful", energy=_ENERGY[request.intensity.value],
         duration_seconds=max(5.0, seconds), description=f"funny meme beat, {request.genre}, comedic, bouncy"[:500],
     )
-    beat = _run(
-        context, audio_jobs.generate_beat,
-        {"request": beat_request.model_dump(mode="json"), "lyrics_asset_id": lyrics_asset.id if lyrics_asset else None,
-         "seed": secrets.randbelow(2**31)},
-        (0.55, 0.7), STEP_BEAT,
-    )
+    beat: Asset | None = None
+    if sung is None:
+        beat = _run(
+            context, audio_jobs.generate_beat,
+            # After a singer failure the beat comes from the built-in engine: the same
+            # hosted model would most likely fail again (and may cost money).
+            {"request": beat_request.model_dump(mode="json"), "lyrics_asset_id": lyrics_asset.id if lyrics_asset else None,
+             "seed": secrets.randbelow(2**31), "builtin_engine": singer_failed},
+            (0.55, 0.7), STEP_BEAT,
+        )
 
     # ---- 4. mix ----
-    primary = beat
-    if lyrics_asset is not None and vocals is not None:
+    primary = sung or beat
+    assert primary is not None
+    if sung is None and lyrics_asset is not None and vocals is not None:
         primary = _run(
             context, audio_jobs.generate_song,
             {"mode": "mix", "lyrics_asset_id": lyrics_asset.id, "beat_asset_id": beat.id, "vocals_asset_id": vocals.id, "title": title},
@@ -200,6 +229,8 @@ def generate_troll(context: JobContext) -> str:
             "cover_asset_id": cover.id if cover else None,
             "video_asset_id": video.id if video else None,
             "warnings": warnings,
+            "performance": "sung" if sung is not None else ("spoken" if vocals is not None else "instrumental"),
+            "singer_fallback": singer_failed,
             "lyrics_reused": reused,
             "remix_of": context.params.get("remix_of"),
             "rivalry_id": context.params.get("rivalry_id"),

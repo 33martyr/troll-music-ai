@@ -86,6 +86,36 @@ DELIVERIES: dict[str, tuple[str, str]] = {
 }
 
 
+# vocal style id -> (label, words for a music model that sings). These are prompt
+# directions, not voice presets: the model follows them loosely, and none of them
+# imitates a real singer.
+VOCAL_STYLES: dict[str, tuple[str, str]] = {
+    "auto": ("Match the genre", ""),
+    "aggressive": ("Aggressive rap", "aggressive, shouted rap vocals, hard-hitting flow"),
+    "deep": ("Deep rap", "deep, low male rap vocals, slow menacing flow"),
+    "playful": ("Playful rap", "playful, bouncy rap vocals, cheeky and animated"),
+    "comedic": ("Comedic", "comedic, over-the-top theatrical vocals, exaggerated character voice"),
+    "melodic": ("Melodic rap", "melodic, auto-tuned rap-singing vocals"),
+    "pop": ("Pop singer", "bright, catchy female pop vocals, sing-along hook"),
+    "electronic": ("Electronic", "energetic, processed electronic dance vocals, vocal chops"),
+}
+
+# style id -> (music model genre directions, default vocal style). More explicit
+# about instruments than the lyricist's words, so each genre sounds like itself.
+SONG_SOUNDS: dict[str, tuple[str, str]] = {
+    "drill": ("UK drill, sliding 808 bass, skippy hi-hats, dark piano, 142 BPM", "aggressive"),
+    "trap": ("trap, booming 808s, rolling hi-hats, ad-libs, 140 BPM", "playful"),
+    "hip-hop": ("boom bap hip-hop, dusty drum break, vinyl scratches, jazzy sample, 92 BPM", "comedic"),
+    "pop": ("upbeat pop, bright synths, handclaps, big sing-along chorus, 118 BPM", "pop"),
+    "country": ("country, twangy acoustic and slide guitar, stomping drums, 100 BPM", "comedic"),
+    "opera": ("operatic, orchestral strings and timpani, dramatic choir, theatrical", "comedic"),
+    "techno": ("techno, pounding four-on-the-floor kick, rave synths, 130 BPM", "electronic"),
+    "circus": ("circus march, tuba, calliope organ, snare rolls", "comedic"),
+    "8-bit": ("chiptune, 8-bit square-wave melody, retro video game", "electronic"),
+}
+_HEAT = {"friendly": "light-hearted, cheeky", "savage": "cocky, mocking", "brutal": "hard, ruthless, mocking", "nuclear": "explosive, maximum hype, mocking"}
+
+
 class Participant(BaseModel):
     """Someone in a group chat roast. Only what the user typed is used."""
 
@@ -121,6 +151,15 @@ class TrollRequest(BaseModel):
         description="Rap battle between two Troll Universe rappers: [{name, personality, style}, {...}].",
     )
     group_name: str | None = Field(default=None, max_length=60)
+    vocal_style: str = Field(default="auto", description="One of VOCAL_STYLES. Only used by music models that sing.")
+
+    @field_validator("vocal_style")
+    @classmethod
+    def _vocal_style(cls, value: str | None) -> str:
+        value = (value or "auto").strip()
+        if value not in VOCAL_STYLES:
+            raise ValueError(f"Unknown vocal style '{value}'. Choose one of: {', '.join(VOCAL_STYLES)}.")
+        return value
 
     @field_validator("inside_jokes")
     @classmethod
@@ -198,6 +237,17 @@ class TrollRequest(BaseModel):
     def genre(self) -> str:
         sub = next((words for sid, _, words in SUBGENRES.get(self.style, []) if sid == self.subgenre), None)
         return f"{sub}, {STYLES[self.style][1]}" if sub else STYLES[self.style][1]
+
+    @property
+    def song_style(self) -> str:
+        """Comma-separated directions for a music model that sings the whole song."""
+        sound, default_vocal = SONG_SOUNDS[self.style]
+        sub = next((words for sid, _, words in SUBGENRES.get(self.style, []) if sid == self.subgenre), None)
+        vocal = VOCAL_STYLES[self.vocal_style if self.vocal_style != "auto" else default_vocal][1]
+        parts = [sub, sound, vocal, _HEAT[self.intensity.value], "funny comedy song", f"clear, intelligible {self.language} vocals", "polished studio mix"]
+        if self.kind is TrollKind.RAP_BATTLE:
+            parts.insert(2, "two rappers trading verses, two contrasting voices")
+        return ", ".join(p for p in parts if p)
 
     @property
     def beat_genre(self) -> str:
@@ -314,5 +364,6 @@ def options() -> dict:
         "subgenres": {style: [{"id": sid, "label": label} for sid, label, _ in subs] for style, subs in SUBGENRES.items()},
         "lengths": list(LENGTHS),
         "deliveries": [{"id": k, "label": v[0]} for k, v in DELIVERIES.items()],
+        "vocal_styles": [{"id": k, "label": v[0]} for k, v in VOCAL_STYLES.items()],
         "templates": [t.model_dump() for t in TEMPLATES],
     }

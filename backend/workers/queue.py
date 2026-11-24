@@ -27,8 +27,10 @@ class JobQueue(Protocol):
 class ThreadPoolJobQueue:
     """Runs jobs on a thread pool inside the API process.
 
-    Fine for a single-machine install. Jobs do not survive a restart: anything
-    unfinished is marked failed on the next startup.
+    Fine for a single-machine install. Jobs are rows in the database, so on the
+    next startup jobs that were still queued are run, and jobs that were in
+    progress are marked failed (they may already have called a paid provider;
+    the user can retry them with one click).
     """
 
     def __init__(self, run_job: RunJob, workers: int = 2) -> None:

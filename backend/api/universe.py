@@ -185,7 +185,7 @@ def update_rapper(rapper_id: str, body: RapperPatch, session: SessionDep, storag
         raise ApiError(422, "validation_error", f"Unknown delivery. Choose one of: {', '.join(DELIVERIES)}.")
     for key, value in changes.items():
         setattr(rapper, key, value)  # stats arrive as a validated dict
-    if rapper.origin != "manual":
+    if changes and rapper.origin != "manual":  # an empty patch only reprints the card
         rapper.origin = f"{rapper.origin}+edited" if not rapper.origin.endswith("+edited") else rapper.origin
     _redraw_card(session, storage, rapper)
     session.commit()

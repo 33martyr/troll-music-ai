@@ -3,18 +3,13 @@
 import { AlertTriangle, Loader2, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-/** Only one track plays at a time across the app: starting one pauses the rest. */
-const playing = new Set<HTMLAudioElement>();
-function claim(audio: HTMLAudioElement) {
-  for (const other of playing) if (other !== audio) other.pause();
-  playing.add(audio);
-}
+import { exclusivePlayback, formatTime } from "@/lib/timeline";
 
-export function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-  const whole = Math.floor(seconds);
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-}
+export { formatTime };
+
+/** Only one track plays at a time across the app: starting one pauses the rest. */
+const players = exclusivePlayback<HTMLAudioElement>();
+const claim = (audio: HTMLAudioElement) => players.claim(audio);
 
 /**
  * The app's audio player: play/pause, seekable progress with time, mute and
@@ -55,7 +50,7 @@ export function TrackPlayer({
     return () => {
       if (element) {
         element.pause();
-        playing.delete(element);
+        players.release(element);
       }
     };
   }, []);

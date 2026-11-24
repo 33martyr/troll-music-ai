@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.storage import Storage
@@ -194,12 +194,26 @@ class JobRunner:
         session.commit()
 
 
+def queued_job_ids(session_factory: sessionmaker[Session]) -> list[str]:
+    """Jobs a previous process accepted but never started, oldest first.
+
+    They are safe to run after a restart: nothing was generated or charged yet.
+    """
+    with session_factory() as session:
+        rows = session.execute(select(Job.id).where(Job.status == JobStatus.QUEUED).order_by(Job.created_at))
+        return [row[0] for row in rows]
+
+
 def fail_interrupted_jobs(session_factory: sessionmaker[Session]) -> int:
-    """Mark jobs left unfinished by a previous process as failed."""
+    """Mark jobs a previous process was in the middle of as failed.
+
+    They are not re-run automatically: a half-finished job may already have
+    called a paid provider, so retrying is left to the user (one click).
+    """
     with session_factory() as session:
         result = session.execute(
             update(Job)
-            .where(Job.status.in_(JobStatus.ACTIVE))
+            .where(Job.status == JobStatus.PROCESSING)
             .values(
                 status=JobStatus.FAILED,
                 stage="Failed",

@@ -241,11 +241,25 @@ class BeatRequest(BaseModel):
         return ", ".join(parts) + ", no vocals"
 
 
+class SongPart(BaseModel):
+    """One section of a song to be sung: its label and its lines, in order."""
+
+    label: str = Field(min_length=1, max_length=100)
+    lines: list[str] = Field(default_factory=list)
+
+
 class SongRequest(BaseModel):
-    """Full-song generation by a model that can sing (not speech synthesis)."""
+    """Full-song generation by a model that can sing (not speech synthesis).
+
+    ``sections`` carries the same lyrics as ``lyrics_text`` in structured form,
+    for models that take a per-section plan (ElevenLabs). ``style_prompt`` is a
+    comma-separated list of musical and vocal directions.
+    """
 
     lyrics_text: str
     style_prompt: str
+    sections: list[SongPart] = Field(default_factory=list)
+    negative_style: str | None = None
     duration_seconds: float = Field(default=90, ge=10, le=300)
     bpm: int | None = None
     language: str = "en"

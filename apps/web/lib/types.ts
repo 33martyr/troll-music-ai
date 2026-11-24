@@ -47,6 +47,9 @@ export interface LineTiming {
 
 /** Facts about a media file. Which keys are present depends on the asset kind. */
 export interface AssetMeta {
+  /** "unverified": a singing model was given the lyrics; nothing checks it sang them all. */
+  lyrics_adherence?: "unverified";
+  style_prompt?: string;
   bpm?: number | null;
   bpm_exact?: boolean;
   genre?: string;
@@ -100,6 +103,8 @@ export interface TrollRequest {
   subgenre?: string | null;
   length?: string;
   instructions?: string | null;
+  /** Only used when the music provider sings whole songs. */
+  vocal_style?: string;
   inside_jokes?: string[];
   people?: Participant[];
   group_name?: string | null;
@@ -248,6 +253,8 @@ export interface Capability {
   endpoint: string | null;
   is_mock: boolean;
   is_ai: boolean;
+  /** Music only: sings whole songs from lyrics (not text-to-speech). */
+  sings?: boolean;
   note: string;
 }
 

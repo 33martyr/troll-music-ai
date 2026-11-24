@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends, Request
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.core.config import Settings
-from backend.core.errors import not_found
+from backend.core.errors import ApiError, not_found
 from backend.core.storage import Storage
-from backend.models.tables import Asset, AssetKind, Job, Project
+from backend.models.tables import Asset, AssetKind, Job, JobStatus, Project
 from backend.services.providers import ProviderManager
 from backend.workers.queue import JobQueue
 
@@ -61,10 +63,18 @@ def load_asset(session: Session, asset_id: str, kind: str | tuple[str, ...] | No
     return asset
 
 
+# A backstop against runaway clients: with a paid music provider every job can
+# cost money, so the queue does not grow without bound.
+MAX_WAITING_JOBS = int(os.environ.get("TROLL_MAX_WAITING_JOBS", "20"))
+
+
 def submit_job(session: Session, queue: JobQueue, *, kind: str, project_id: str | None, params: dict, retry_of: str | None = None) -> Job:
     """Create the job row, enqueue it and return its current state."""
     if project_id:
         load_project(session, project_id)
+    waiting = session.scalar(select(func.count()).select_from(Job).where(Job.status.in_(JobStatus.ACTIVE))) or 0
+    if waiting >= MAX_WAITING_JOBS:
+        raise ApiError(429, "too_many_jobs", f"{waiting} jobs are already waiting. Let some finish, then try again.")
     job = Job(kind=kind, project_id=project_id, params=params, retry_of=retry_of)
     session.add(job)
     session.commit()

@@ -18,8 +18,8 @@ from backend.models.tables import Asset, AssetKind, VoiceProfile
 from backend.workers.runner import JobContext, JobHandler
 from troll_music_ai import FeatureNotAvailableError, Lyrics, TrollMusicError
 from troll_music_ai.providers import MusicGenerationProvider, VoiceProvider
-from troll_music_ai.providers.procedural import preset_for
-from troll_music_ai.types import BeatRequest, SongRequest, SpeechLine
+from troll_music_ai.providers.procedural import ProceduralBeatProvider, preset_for
+from troll_music_ai.types import BeatRequest, SongPart, SongRequest, SpeechLine
 
 JOB_BEAT = "beat.generate"
 JOB_VOCALS = "vocals.generate"
@@ -34,7 +34,11 @@ AUDIO_KINDS = (AssetKind.BEAT, AssetKind.VOCALS, AssetKind.SONG)
 
 def generate_beat(context: JobContext) -> str:
     request = BeatRequest.model_validate(context.params["request"])
-    provider: MusicGenerationProvider = context.providers.require("music")  # type: ignore[assignment]
+    provider: MusicGenerationProvider
+    if context.params.get("builtin_engine"):
+        provider = ProceduralBeatProvider()  # fallback after a hosted singer failed
+    else:
+        provider = context.providers.require("music")  # type: ignore[assignment]
     info = context.using(provider)
     capabilities = provider.capabilities
     lyrics = context.asset(context.params["lyrics_asset_id"], AssetKind.LYRICS) if context.params.get("lyrics_asset_id") else None
@@ -216,6 +220,12 @@ def _lyrics_text(lyrics: Lyrics) -> str:
     return "\n\n".join("\n".join([f"[{s.label}]", *s.lines]) for s in lyrics.sections)
 
 
+def song_seconds(lyrics: Lyrics) -> float:
+    """How long a sung version should run: about 2.6 s per line plus room for the intro and outro."""
+    lines = sum(len(s.lines) for s in lyrics.sections)
+    return float(max(30, min(240, round(lines * 2.6 + 10))))
+
+
 def _song_from_model(context: JobContext, lyrics_asset: Asset) -> str:
     """Let a music model that can sing produce the whole song from the lyrics."""
     provider: MusicGenerationProvider = context.providers.require("music")  # type: ignore[assignment]
@@ -223,27 +233,39 @@ def _song_from_model(context: JobContext, lyrics_asset: Asset) -> str:
     if not provider.capabilities.with_vocals:
         raise FeatureNotAvailableError(
             f"The active music provider ({info.name}) cannot sing lyrics. "
-            "ACE-Step can; choose it in AI Settings, or mix a beat with spoken vocals instead."
+            "ElevenLabs Music and ACE-Step can; choose one in AI Settings, or mix a beat with spoken vocals instead."
         )
     lyrics = Lyrics.model_validate(lyrics_asset.content)
     request = SongRequest(
         lyrics_text=_lyrics_text(lyrics),
+        sections=[SongPart(label=s.label, lines=s.lines) for s in lyrics.sections if s.lines],
         style_prompt=context.params.get("style_prompt") or f"{lyrics.suggested_genre or 'hip-hop'}, comedic rap vocals",
-        duration_seconds=float(context.params.get("duration_seconds") or 90),
+        negative_style=context.params.get("negative_style") or "spoken word, monotone, robotic voice",
+        duration_seconds=float(context.params.get("duration_seconds") or song_seconds(lyrics)),
         bpm=lyrics.suggested_bpm,
     )
-    context.progress(0.05, f"Generating the full song with {info.name}")
+    context.progress(0.05, f"The AI singer is performing it ({info.name}). This can take a few minutes")
     raw = asyncio.run(provider.generate_song(request, context.workdir / "song_raw", secrets.randbelow(2**31)))
-    context.progress(0.85, "Normalizing and encoding")
+    context.progress(0.85, "Checking and encoding the audio")
     final = ffmpeg.finalize_audio(raw, context.workdir / "song.mp3")
+    duration = ffmpeg.probe(final).duration
+    if not duration or duration < 3:
+        raise TrollMusicError(f"{info.name} returned audio that is too short to be a song ({duration or 0:.1f}s).")
     return context.store(
         final,
         kind=AssetKind.SONG,
         title=context.params.get("title") or lyrics.title,
         info=info,
         mime_type="audio/mpeg",
-        duration=ffmpeg.probe(final).duration,
-        meta={"bpm": lyrics.suggested_bpm, "delivery": "sung", "mode": "model"},
+        duration=duration,
+        meta={
+            "bpm": lyrics.suggested_bpm,
+            "delivery": "sung",
+            "mode": "model",
+            "style_prompt": request.style_prompt,
+            # The model was given these exact lines; nothing checks that it sang them all.
+            "lyrics_adherence": "unverified",
+        },
         sources={"lyrics": lyrics_asset},
     ).id
 

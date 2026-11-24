@@ -338,6 +338,8 @@ class CapabilityOut(BaseModel):
     endpoint: str | None = None
     is_mock: bool = False
     is_ai: bool = True
+    # Music only: the provider sings whole songs from lyrics (not text-to-speech).
+    sings: bool = False
     note: str = ""
 
 

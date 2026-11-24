@@ -46,6 +46,8 @@ def capabilities(providers: ProvidersDep):
             info = provider.info
             item.provider, item.model, item.endpoint = info.name, info.model, info.endpoint
             item.is_mock, item.is_ai = info.is_mock, info.is_ai
+            capabilities = getattr(provider, "capabilities", None)
+            item.sings = bool(kind == "music" and getattr(capabilities, "with_vocals", False))
             if info.is_mock:
                 item.note = "Mock provider: output is placeholder text, not AI-generated."
             elif not info.is_ai:

@@ -1,0 +1,6 @@
+# Host builds (often another OS) must not overwrite the image's own install.
+node_modules
+.next
+.env
+.env.*
+!.env.example

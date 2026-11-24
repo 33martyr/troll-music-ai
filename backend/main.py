@@ -25,7 +25,7 @@ from backend.services import audio_jobs, factory_jobs, troll_jobs, universe_jobs
 from backend.services import lyrics as lyrics_jobs
 from backend.services.providers import ProviderManager
 from backend.workers.queue import InlineJobQueue, ThreadPoolJobQueue
-from backend.workers.runner import JobRunner, fail_interrupted_jobs
+from backend.workers.runner import JobRunner, fail_interrupted_jobs, queued_job_ids
 from troll_music_ai.providers import Provider, TextGenerationProvider
 
 log = logging.getLogger(__name__)
@@ -70,6 +70,11 @@ def create_app(
         interrupted = fail_interrupted_jobs(session_factory)
         if interrupted:
             log.warning("Marked %d interrupted job(s) as failed", interrupted)
+        waiting = queued_job_ids(session_factory)
+        if waiting and not inline_jobs:
+            log.info("Resuming %d job(s) that were queued before the restart", len(waiting))
+            for job_id in waiting:
+                queue.enqueue(job_id)
         ok, detail = ffmpeg.available()
         if not ok:
             log.warning("FFmpeg not found: audio and video features are disabled. %s", detail)

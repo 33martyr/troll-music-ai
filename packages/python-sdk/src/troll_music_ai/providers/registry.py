@@ -208,15 +208,20 @@ def _register_all() -> None:
         lambda c: AceStepProvider(base_url=c.base_url, api_key=c.api_key, model=c.model),
         default_base_url="http://localhost:8001", capabilities=("instrumental", "full_song_with_vocals"),
         params=(*beat_params, "bpm", "key"), hardware="CUDA GPU; about 5 GB of weights; Python 3.11-3.12 in its own environment",
-        license="MIT (code). Check the model card before commercial release.", verified=False,
-        setup="Clone ace-step/ACE-Step-1.5 and run: uv run acestep-api",
+        license="MIT (code). Check the weights' model card before commercial release.", verified=False,
+        setup="Free and local. Clone ace-step/ACE-Step-1.5, run: uv sync, then: uv run acestep-api (weights download on first run). 8 GB VRAM is enough for the 2B turbo model.",
     ))
     register(ProviderSpec(
-        M, "elevenlabs_music", "ElevenLabs Music (hosted)", "Hosted text-to-music. No GPU needed.",
+        M, "elevenlabs_music", "ElevenLabs Music (hosted)",
+        "Hosted text-to-music that sings your lyrics (rap included) over a full backing track. No GPU needed. Prompts and lyrics leave this machine.",
         lambda c: ElevenLabsMusicProvider(base_url=c.base_url, api_key=c.api_key, model=c.model),
-        local=False, needs_api_key=True, default_base_url="https://api.elevenlabs.io", default_model="music_v1",
-        capabilities=("instrumental",), params=beat_params, license="ElevenLabs terms; commercial use depends on your plan.",
-        verified=False, setup="Create an API key on a plan that includes Music.",
+        local=False, needs_api_key=True, default_base_url="https://api.elevenlabs.io", default_model="music_v2_5",
+        suggested_models=("music_v2_5", "music_v2", "music_v1"),
+        capabilities=("instrumental", "full_song_with_vocals"), params=(*beat_params, "lyrics", "vocal_style"),
+        license="ElevenLabs music terms; cleared for most commercial uses on paid plans (see elevenlabs.io/music-terms).",
+        verified=False,
+        setup="The Music API is only for paid ElevenLabs plans. Create an API key with music access and set "
+        "TROLL_MUSIC_PROVIDER=elevenlabs_music and TROLL_MUSIC_API_KEY. Every song uses credits.",
     ))
 
     register(ProviderSpec(

@@ -39,7 +39,13 @@ TROLL-MUSIC-AI is for comedy. These are the rules the project is built around.
 - **Uploads are checked by content.** Every upload is probed with FFmpeg (a renamed text file is rejected),
   size-limited (`TROLL_MAX_UPLOAD_MB`, default 50) and re-encoded before it is stored.
 - **Honest labels.** Built-in engines are marked "not AI"; speech vocals are marked "spoken, not sung";
-  untested adapters are marked "(untested)" in Model Settings.
+  songs from a singing model are marked "Sung by an AI music model", with a note that the singer may change or
+  skip words; untested adapters are marked "(untested)" in AI Settings. If the singer fails, the spoken fallback
+  says so on the result.
+- **Original voices only.** Singing-voice choices are generic directions ("deep rap", "pop singer") sent to the
+  music model. None names or imitates a real artist; voice cloning stays behind the consent rules below.
+- **Paid providers are not hammered.** The ElevenLabs adapter retries only rate limits and server errors (twice),
+  never timeouts, and the job queue refuses new work past `TROLL_MAX_WAITING_JOBS`.
 
 ## Voice profiles
 

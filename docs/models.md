@@ -32,8 +32,47 @@ Built-in engines are real, deterministic software, not AI. Their output is label
 | --- | --- | --- | --- | --- |
 | `procedural` (default) | local, CPU | `troll-synth-1` | Built-in, tested | NumPy drum machine, bass and chords with genre presets. Exact BPM and length, reproducible per seed. Not AI. |
 | `musicgen` | local, GPU recommended | `facebook/musicgen-small` (also medium, stereo-small) | **Blocked here**: weights not downloaded | Up to 30 s per pass; longer beats are looped by FFmpeg and marked `looped`. BPM is only a prompt hint (`bpm_exact: false`). **CC-BY-NC 4.0: non-commercial.** Needs `torch`, `transformers`, then `python scripts/download_models.py musicgen` (~2.4 GB). Never downloads on its own (`local_files_only`). |
-| `acestep` | your server, CUDA GPU | ACE-Step 1.5 | Mocked only | The only option that **sings lyrics** (Song page, "Sung by a music model"). Run its API server (`uv run acestep-api`, port 8001) in its own Python 3.11–3.12 environment. Uses `/release_task`, `/query_result`, `/v1/audio`. |
-| `elevenlabs_music` | hosted | `music_v1` | Mocked only | `POST /v1/music` with `force_instrumental`. Needs a plan with Music. |
+| `acestep` | your server, CUDA GPU | ACE-Step 1.5 | Mocked only | **Sings lyrics.** Free and local. Run its API server (`uv run acestep-api`, port 8001) in its own Python 3.11–3.12 environment; 8 GB VRAM runs the 2B turbo model with the 0.6B planner. Uses `/release_task` (with `thinking: true` for songs), `/query_result`, `/v1/audio`. |
+| `elevenlabs_music` | hosted | `music_v2_5` (also `music_v2`, `music_v1`) | Mocked only | **Sings lyrics.** `POST /v1/music` with a composition plan: one chunk (v2) or section (v1) per lyric section, with its exact lines and a share of the duration. The Music API needs a **paid** plan; every song uses credits. |
+
+### Full songs with AI vocals
+
+When the active music provider can sing (`acestep` or `elevenlabs_music`), every lyric troll (diss track, roast,
+meme song, group roast, battle, meme video) goes **lyrics → one call to the singing model → cover (→ video)**.
+There is no separate beat, vocal or mix step, and the timeline shows only "Performing the song" for that part,
+because that is what really happens. The style sent to the model comes from the genre, flavour, intensity and
+the optional singing voice (`vocal_style`: aggressive, deep, playful, comedic, melodic, pop, electronic). These
+are prompt directions, not voice presets, and none of them imitates a real artist.
+
+What is and is not guaranteed:
+
+- The model receives the exact lyrics, in order, section by section. **Nothing checks that it sang every word**;
+  the song is stored with `lyrics_adherence: "unverified"` and the result page says the singer may change or skip
+  words.
+- The audio is normalized to -14 LUFS and encoded as 192 kbps MP3, and a reply shorter than 3 s is rejected.
+- If the singer fails (bad key, no paid plan, rate limit after two retries, server down), the troll still
+  finishes with **spoken vocals over the built-in beat**, and a warning on the result says why. Timeouts are not
+  retried, because a timed-out request may already have been charged.
+- Without a singing provider the spoken pipeline is unchanged and labelled "Spoken, not sung".
+
+Setup, cheapest first:
+
+1. **ACE-Step (free, local GPU).** `git clone https://github.com/ace-step/ACE-Step-1.5`, then `uv sync` and
+   `uv run acestep-api` in that folder (weights download on first run). Set `TROLL_MUSIC_PROVIDER=acestep`
+   (or choose it in AI Settings).
+2. **ElevenLabs Music (paid).** Create an API key with music access on a paid plan, then set
+   `TROLL_MUSIC_PROVIDER=elevenlabs_music` and `TROLL_MUSIC_API_KEY`. Optional: `TROLL_MUSIC_MODEL=music_v1`.
+
+### Providers considered (November 2026)
+
+| Option | Sings / raps | Official API | Cost | Verdict |
+| --- | --- | --- | --- | --- |
+| ElevenLabs Music | Yes; v2/v2.5 are documented as handling fast rap | Yes, `POST /v1/music`, lyrics per section | Paid plans only, credits per song | **Integrated** (hosted choice) |
+| ACE-Step 1.5 | Yes, sings supplied lyrics | Local API server (MIT code) | Free; needs a GPU | **Integrated** (free local choice) |
+| MiniMax Music | Yes | Was official; MiniMax closed the paid music API to new users on 20 Aug 2026 and discontinued the free tier | n/a | Not integrated |
+| Suno, Udio | Yes | No official public API | n/a | Not integrated (no unofficial endpoints) |
+| Stable Audio | Instrumentals; not a lyrics-to-song model | Yes | Paid | Not suitable for vocals |
+| MusicGen | Instrumentals only | Local | Free (CC-BY-NC weights) | Already integrated for beats |
 
 ## Voice (vocals, voice profiles)
 

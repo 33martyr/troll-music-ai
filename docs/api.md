@@ -123,7 +123,15 @@ another style is ignored), `intensity` (`friendly`, `savage`, `brutal`, `nuclear
 keeps the same rules), `length` (`short`, `standard`, `long`), `instructions` (free text, up to 300 characters),
 `delivery` (`cocky`, `hype`, `narrator`, `deadpan`,
 `news`, `diva`), `target`, `rapper_name`, `template`, `inside_jokes` (up to 5), `people` (group roast: `name`,
-`nickname`, `description`, `voice`), `group_name`, `voice`, `voice_b` (battle), `explicit`, `language`.
+`nickname`, `description`, `voice`), `group_name`, `voice`, `voice_b` (battle), `explicit`, `language`,
+`vocal_style` (`auto`, `aggressive`, `deep`, `playful`, `comedic`, `melodic`, `pop`, `electronic`; only used when
+the music provider sings whole songs).
+
+With a singing music provider (`/api/system/capabilities` reports `"sings": true` for music), the job runs
+`Writing the lyrics`, then `Performing the song`, then the cover and video; the song asset has
+`meta.delivery: "sung"`, `meta.lyrics_adherence: "unverified"` and `meta.troll.performance: "sung"`. If the singer
+fails, the job falls back to the spoken stages below, sets `meta.troll.singer_fallback: true` and adds a warning.
+New jobs get `429 too_many_jobs` while `TROLL_MAX_WAITING_JOBS` (default 20) are already queued or running.
 
 The job's `stage` reads `"<step> · <detail>"` where step is one of `Writing the lyrics`, `Recording the vocals`,
 `Building the beat`, `Mixing the track`, `Designing the cover`, `Rendering the video`. The finished song (or beat)

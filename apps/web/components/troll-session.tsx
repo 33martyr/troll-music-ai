@@ -3,7 +3,7 @@
 import { type RefObject, useState } from "react";
 import { api } from "@/lib/api";
 import type { Job, TrollKind, TrollRequest } from "@/lib/types";
-import { useJobRunner } from "./studio";
+import { useCapability, useJobRunner } from "./studio";
 import { planSteps, type RemixChanges, type StepId } from "./troll";
 
 /** Generate, regenerate and remix trolls on one page, following the job with a step timeline. */
@@ -13,6 +13,7 @@ export function useTrollSession(anchor: RefObject<HTMLDivElement | null>) {
   const [result, setResult] = useState<Job | null>(null);
   const [project, setProject] = useState<string | null>(null);
   const [kind, setKind] = useState<TrollKind>("diss_track");
+  const sung = !!useCapability("music").capability?.sings;
 
   function start() {
     setResult(null);
@@ -21,7 +22,7 @@ export function useTrollSession(anchor: RefObject<HTMLDivElement | null>) {
 
   async function generate(request: TrollRequest, opts: { video?: boolean; sameProject?: boolean } = {}) {
     setKind(request.kind);
-    setSteps(planSteps(request.kind, { video: opts.video }));
+    setSteps(planSteps(request.kind, { video: opts.video, sung }));
     start();
     const done = await runner.run(() => api.troll(request, opts.sameProject ? project : null, { with_video: !!opts.video }));
     if (done) {
@@ -32,7 +33,7 @@ export function useTrollSession(anchor: RefObject<HTMLDivElement | null>) {
 
   async function remix(assetId: string, changes: RemixChanges, trollKind: TrollKind = kind) {
     const rewrite = !!(changes.instruction || changes.delivery || changes.intensity || changes.regenerate_sections?.length);
-    setSteps(planSteps(trollKind, { reuseLyrics: trollKind !== "funny_beat", rewrite }));
+    setSteps(planSteps(trollKind, { reuseLyrics: trollKind !== "funny_beat", rewrite, sung }));
     start();
     const done = await runner.run(() => api.remix({ asset_id: assetId, ...changes }));
     if (done) setResult(done);

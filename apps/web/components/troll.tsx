@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { formatTime, TrackPlayer } from "./player";
 import { api, errorMessage, fileUrl, type RemixBody } from "@/lib/api";
+import { currentStep, fellBackToSpoken, spokenSteps, STEPS, type StepId } from "@/lib/timeline";
 import type { Asset, Intensity, Job, LineTiming, Lyrics, TrollKind, TrollMeta, TrollRequest } from "@/lib/types";
 import { JobStatus, OriginBadge, useJobRunner } from "./studio";
 import { Badge, Button, Card, Equalizer, Notice } from "./ui";
@@ -66,6 +67,18 @@ export const DELIVERIES: { id: string; label: string }[] = [
   { id: "diva", label: "💅 Diva" },
 ];
 
+/** Directions for a music model that sings. Shown only when one is active; they steer, not guarantee. */
+export const VOCAL_STYLES: { id: string; label: string }[] = [
+  { id: "auto", label: "🎯 Match the genre" },
+  { id: "aggressive", label: "😤 Aggressive rap" },
+  { id: "deep", label: "🗿 Deep rap" },
+  { id: "playful", label: "😜 Playful rap" },
+  { id: "comedic", label: "🤡 Comedic" },
+  { id: "melodic", label: "🎶 Melodic rap" },
+  { id: "pop", label: "🎤 Pop singer" },
+  { id: "electronic", label: "🎛️ Electronic" },
+];
+
 const JOKES = [
   "Gathering embarrassing evidence…",
   "Preparing lyrical destruction…",
@@ -79,34 +92,12 @@ const JOKES = [
   "Printing the parental advisory sticker…",
 ];
 
-/** Stage labels the backend writes into job.stage ("<label> · <detail>"), in run order. */
-export const STEPS = {
-  words: { label: "Writing the lyrics", emoji: "✍️" },
-  vocals: { label: "Recording the vocals", emoji: "🎤" },
-  beat: { label: "Building the beat", emoji: "🥁" },
-  mix: { label: "Mixing the track", emoji: "🎚️" },
-  cover: { label: "Designing the cover", emoji: "🖼️" },
-  video: { label: "Rendering the video", emoji: "🎬" },
-} as const;
-export type StepId = keyof typeof STEPS;
-
-/** Which stages a troll job will run, mirroring backend/services/troll_jobs.py. */
-export function planSteps(kind: TrollKind, opts: { video?: boolean; cover?: boolean; reuseLyrics?: boolean; rewrite?: boolean } = {}): StepId[] {
-  const steps: StepId[] = [];
-  const beatOnly = kind === "funny_beat";
-  if (!beatOnly && (!opts.reuseLyrics || opts.rewrite)) steps.push("words");
-  if (!beatOnly) steps.push("vocals");
-  steps.push("beat");
-  if (!beatOnly) steps.push("mix");
-  if (opts.cover !== false || beatOnly) steps.push("cover");
-  if (kind === "meme_video" || opts.video) steps.push("video");
-  return steps;
-}
+export { planSteps, STEPS, type StepId } from "@/lib/timeline";
 
 /** Real job progress as a timeline of stages, with jokes while it runs. */
 export function TrollProgress({
   runner,
-  steps,
+  steps: planned,
   onRetried,
 }: {
   runner: ReturnType<typeof useJobRunner>;
@@ -115,16 +106,20 @@ export function TrollProgress({
   onRetried?: (job: Job) => void;
 }) {
   const [tick, setTick] = useState(0);
+  const [fellBack, setFellBack] = useState<string | null>(null);
   const running = runner.busy;
+  const job = runner.job;
+  const stage = job?.stage ?? "";
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => setTick((value) => value + 1), 2600);
     return () => clearInterval(timer);
   }, [running]);
+  // The AI singer failed and the job fell back to spoken vocals: from then on, show the stages it really runs.
+  if (job && fellBackToSpoken(planned, stage) && fellBack !== job.id) setFellBack(job.id);
   if (!running) return <JobStatus runner={runner} onRetried={onRetried} />;
-  const job = runner.job;
-  const stage = job?.stage ?? "";
-  const current = steps.findIndex((id) => stage.startsWith(STEPS[id].label));
+  const steps = job && fellBack === job.id ? spokenSteps(planned) : planned;
+  const current = currentStep(steps, stage);
   const detail = stage.includes(" · ") ? stage.split(" · ").slice(1).join(" · ") : null;
   return (
     <Card className="overflow-hidden p-5 sm:p-6">
@@ -304,6 +299,7 @@ function DownloadLink({ asset, label }: { asset: Asset; label: string }) {
 function MadeWith({ made }: { made: Made }) {
   const rows: [string, Asset<unknown> | null][] = [
     ["Words", made.lyrics],
+    ["Song", made.song?.meta?.mode === "model" ? made.song : null],
     ["Beat", made.parts.find((a) => a.kind === "beat") ?? null],
     ["Voice", made.parts.find((a) => a.kind === "vocals") ?? null],
     ["Cover", made.cover],
@@ -320,6 +316,8 @@ function MadeWith({ made }: { made: Made }) {
               <span className="w-12">{label}</span>
               <OriginBadge asset={asset!} />
               {asset!.meta?.delivery === "spoken" && <Badge tone="mock">Spoken, not sung</Badge>}
+              {asset!.meta?.delivery === "sung" && <Badge tone="grape">Sung by an AI music model</Badge>}
+              {asset!.meta?.lyrics_adherence === "unverified" && <span>The singer was given these lyrics; it may change or skip words.</span>}
               {asset!.meta?.renderer === "ffmpeg-stills" && <Badge>Still images + motion</Badge>}
               {asset!.meta?.meme_overlay && <Badge>Text and sticker drawn built-in</Badge>}
             </li>
@@ -580,6 +578,7 @@ export function TrollResult({
                     STYLES.find((s) => s.id === troll.style)?.label,
                     troll.kind !== "funny_beat" ? INTENSITIES.find((i) => i.id === troll.intensity)?.label : null,
                     troll.kind !== "funny_beat" ? DELIVERIES.find((d) => d.id === troll.request?.delivery)?.label : null,
+                    made.song?.meta?.delivery === "sung" ? "🎙️ AI vocals" : made.song?.meta?.delivery === "spoken" ? "Spoken vocals" : null,
                     made.song?.duration_seconds ? formatTime(made.song.duration_seconds) : null,
                   ]
                     .filter(Boolean)

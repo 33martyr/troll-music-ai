@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import io
 import json
+import time
 import zipfile
 
+from fastapi.testclient import TestClient
+
 from backend.models.tables import Job, JobStatus
-from backend.workers.runner import fail_interrupted_jobs
+from backend.workers.runner import fail_interrupted_jobs, queued_job_ids
 from tests.conftest import SONG, ScriptedProvider
 from troll_music_ai import ProviderUnavailableError
 
@@ -256,14 +259,41 @@ def test_unexpected_errors_do_not_leak_internals(make_client):
     assert "secret" not in job["error"]
 
 
-def test_jobs_interrupted_by_a_restart_are_marked_failed(client):
+def test_a_restart_resumes_queued_jobs_and_fails_half_finished_ones(client):
     factory = client.app.state.session_factory
     with factory() as session:
-        session.add_all([Job(kind="lyrics.generate"), Job(kind="lyrics.generate", status=JobStatus.PROCESSING)])
+        waiting, running = Job(kind="lyrics.generate"), Job(kind="lyrics.generate", status=JobStatus.PROCESSING)
+        session.add_all([waiting, running])
         session.commit()
-    assert fail_interrupted_jobs(factory) == 2
+        waiting_id, running_id = waiting.id, running.id
+    assert fail_interrupted_jobs(factory) == 1
+    assert queued_job_ids(factory) == [waiting_id]  # never started: safe to run again
     with factory() as session:
-        assert {job.error_code for job in session.query(Job)} == {"interrupted"}
+        assert session.get(Job, running_id).error_code == "interrupted"  # may have called a paid provider
+        assert session.get(Job, waiting_id).status == JobStatus.QUEUED
+
+
+def test_queued_jobs_really_run_after_a_restart(settings):
+    from backend.main import create_app
+    from troll_music_ai.providers import MockTextProvider
+
+    first = create_app(settings, text_provider=MockTextProvider(), inline_jobs=True)
+    with TestClient(first) as client:
+        factory = client.app.state.session_factory
+        with factory() as session:
+            job = Job(kind="lyrics.generate", params={"request": {"prompt": "a friend who never replies", "genre": "trap"}})
+            session.add(job)
+            session.commit()
+            job_id = job.id
+    # A second process with a real worker pool picks it up on startup.
+    second = create_app(settings, text_provider=MockTextProvider(), inline_jobs=False)
+    with TestClient(second) as client:
+        for _ in range(100):
+            status = client.get(f"/api/jobs/{job_id}").json()["status"]
+            if status in ("completed", "failed"):
+                break
+            time.sleep(0.05)
+        assert status == "completed", client.get(f"/api/jobs/{job_id}").json()
 
 
 def test_capabilities_distinguish_implemented_configured_and_mock(make_client):
@@ -320,3 +350,15 @@ def test_api_key_is_never_returned(settings):
         assert "tiny" in body and "sk-super-secret" not in body
         text = client.get("/api/system/providers").json()[0]
         assert text["has_api_key"] is True and "api_key" not in text
+
+
+def test_the_queue_refuses_new_jobs_when_too_many_are_waiting(client, monkeypatch):
+    from backend.api import deps
+
+    monkeypatch.setattr(deps, "MAX_WAITING_JOBS", 2)
+    factory = client.app.state.session_factory
+    with factory() as session:
+        session.add_all([Job(kind="lyrics.generate"), Job(kind="lyrics.generate", status=JobStatus.PROCESSING)])
+        session.commit()
+    response = client.post("/api/lyrics/generate", json={"request": {"prompt": "a friend who never replies"}})
+    assert response.status_code == 429 and response.json()["error"]["code"] == "too_many_jobs"

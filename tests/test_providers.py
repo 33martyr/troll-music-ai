@@ -129,9 +129,9 @@ def test_elevenlabs_music_request_shape_and_errors(tmp_path):
     assert "drill" in seen["body"]["prompt"] and "140 BPM" in seen["body"]["prompt"]
 
     denied = ElevenLabsMusicProvider(base_url="https://api.elevenlabs.io", api_key="bad", model="music_v1", transport=transport(lambda r: httpx.Response(401, json={"detail": {"message": "Invalid API key"}})))
-    with pytest.raises(ProviderResponseError) as error:
+    with pytest.raises(ProviderNotConfiguredError) as error:
         run(denied.generate_instrumental(BeatRequest(), tmp_path / "x", 0))
-    assert error.value.status_code == 401 and "bad" not in error.value.message
+    assert "rejected the API key" in error.value.message and "bad" not in error.value.message
 
 
 def test_acestep_submits_polls_and_downloads(tmp_path):
